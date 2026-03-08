@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Piano Falling Notes — Video Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0F0F14;
+      --surface:   #16161E;
+      --surface2:  #1E1E2A;
+      --border:    #2A2A3A;
+      --accent:    #7C6CFC;
+      --accent2:   #FC6C9A;
+      --text:      #E8E8F0;
+      --muted:     #6B6B85;
+      --success:   #4ECDC4;
+      --error:     #FF6B6B;
+      --radius:    12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      width: 100%;
+      padding: 28px 24px 20px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #12121A 0%, var(--bg) 100%);
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-keys {
+      display: flex;
+      gap: 3px;
+      align-items: flex-end;
+    }
+
+    .logo-key {
+      width: 8px;
+      border-radius: 0 0 3px 3px;
+    }
+
+    .logo-key.white { background: #E0E0F0; height: 28px; }
+    .logo-key.black { background: #1A1A2A; height: 18px; width: 5px; margin: 0 -1px; z-index: 1; position: relative; }
+    .logo-key.c5  { background: linear-gradient(180deg, #7C6CFC, #FC6C9A); }
+    .logo-key.e5  { background: linear-gradient(180deg, #FC6C9A, #FCAF6C); }
+    .logo-key.g5  { background: linear-gradient(180deg, #4ECDC4, #7C6CFC); }
+
+    h1 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Main layout ─────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 760px;
+      padding: 32px 20px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── Card ────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    /* ── Upload zone ─────────────────────────────── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(124,108,252,0.06);
+    }
+
+    #drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      font-size: 2.4rem;
+      margin-bottom: 10px;
+    }
+
+    .upload-primary {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .upload-secondary {
+      font-size: 0.83rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    #file-chosen {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: var(--success);
+      font-weight: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    /* ── Options grid ────────────────────────────── */
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 520px) {
+      .options-grid { grid-template-columns: 1fr; }
+    }
+
+    .option-group { display: flex; flex-direction: column; gap: 6px; }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+
+    select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 0.9rem;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B6B85' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    select:focus { outline: none; border-color: var(--accent); }
+
+    /* ── Toggle switches ─────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .toggle-label-group { display: flex; flex-direction: column; }
+    .toggle-label-group .label-main { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+    .toggle-label-group .label-sub  { font-size: 0.78rem; color: var(--muted); }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: var(--muted);
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .toggle input:checked + .toggle-track {
+      background: rgba(124,108,252,0.25);
+      border-color: var(--accent);
+    }
+
+    .toggle input:checked + .toggle-track::after {
+      transform: translateX(20px);
+      background: var(--accent);
+    }
+
+    /* ── Convert button ──────────────────────────── */
+    #convert-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    #convert-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #convert-btn:not(:disabled):hover  { opacity: 0.9; }
+    #convert-btn:not(:disabled):active { transform: scale(0.98); }
+
+    /* ── Progress card ───────────────────────────── */
+    #progress-card { display: none; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    #status-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    #pct-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .progress-track {
+      height: 8px;
+      background: var(--surface2);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-bar.indeterminate {
+      width: 40%;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(300%); }
+    }
+
+    #status-detail {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* ── Download card ───────────────────────────── */
+    #download-card { display: none; }
+
+    .success-icon { font-size: 2rem; text-align: center; margin-bottom: 8px; }
+
+    .success-msg {
+      text-align: center;
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--success);
+      margin-bottom: 20px;
+    }
+
+    #download-btn {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: var(--surface2);
+      border: 1px solid var(--success);
+      border-radius: var(--radius-sm);
+      color: var(--success);
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #download-btn:hover { background: rgba(78,205,196,0.12); }
+
+    .restart-link {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 0.83rem;
+      color: var(--muted);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .restart-link:hover { color: var(--text); }
+
+    /* ── Error state ─────────────────────────────── */
+    .error-box {
+      background: rgba(255,107,107,0.1);
+      border: 1px solid rgba(255,107,107,0.3);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: 0.85rem;
+      color: var(--error);
+      margin-top: 12px;
+      display: none;
+    }
+
+    /* ── Footer ──────────────────────────────────── */
+    footer {
+      padding: 20px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      width: 100%;
+      margin-top: auto;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-keys">
+      <div class="logo-key white c5"></div>
+      <div class="logo-key black"></div>
+      <div class="logo-key white e5"></div>
+      <div class="logo-key white g5"></div>
+      <div class="logo-key black"></div>
+      <div class="logo-key white"></div>
+    </div>
+    <div>
+      <h1>Piano Falling Notes</h1>
+      <div class="subtitle">MusicXML → 영상 변환기 / Video Generator</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Upload Card -->
+  <div class="card" id="upload-section">
+    <div class="card-title">1 — 파일 업로드 / Upload File</div>
+    <div id="drop-zone">
+      <input type="file" id="file-input" accept=".musicxml,.mxl,.xml" />
+      <div class="upload-icon">🎵</div>
+      <div class="upload-primary">MusicXML 파일을 여기에 끌어다 놓으세요</div>
+      <div class="upload-secondary">or click to browse · .musicxml / .mxl</div>
+    </div>
+    <div id="file-chosen">
+      <span>✓</span><span id="chosen-name"></span>
+    </div>
+  </div>
+
+  <!-- Options Card -->
+  <div class="card" id="options-section">
+    <div class="card-title">2 — 설정 / Options</div>
+    <div class="options-grid">
+
+      <div class="option-group">
+        <label for="color_mode">색상 모드 / Color Mode</label>
+        <select id="color_mode" name="color_mode">
+          <option value="rainbow_octave">Rainbow Octave</option>
+          <option value="pitch_range">Pitch Range</option>
+          <option value="part_based">Part Based</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="resolution">해상도 / Resolution</label>
+        <select id="resolution" name="resolution">
+          <option value="1080p">1080p (1920×1080)</option>
+          <option value="720p">720p (1280×720)</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="fps">프레임 레이트 / FPS</label>
+        <select id="fps" name="fps">
+          <option value="60">60 fps</option>
+          <option value="30">30 fps</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div style="margin-top:20px; display:flex; flex-direction:column; gap:14px;">
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">글로우 효과 / Glow Effect</span>
+          <span class="label-sub">건반 발광 효과 활성화</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="glow" name="glow" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">오디오 / Audio</span>
+          <span class="label-sub">MIDI 기반 사운드 생성</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="audio" name="audio" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Convert Button -->
+  <button id="convert-btn" disabled>변환 시작 / Start Conversion</button>
+
+  <!-- Progress Card -->
+  <div class="card" id="progress-card">
+    <div class="card-title">3 — 변환 중 / Converting</div>
+    <div class="status-row">
+      <span id="status-label">처리 중...</span>
+      <span id="pct-label">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-bar indeterminate" id="progress-bar"></div>
+    </div>
+    <div id="status-detail"></div>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <!-- Download Card -->
+  <div class="card" id="download-card">
+    <div class="card-title">4 — 완료 / Done</div>
+    <div class="success-icon">🎬</div>
+    <div class="success-msg">영상 변환이 완료되었습니다!</div>
+    <a id="download-btn" href="#">⬇ MP4 다운로드 / Download MP4</a>
+    <span class="restart-link" id="restart-link">다른 파일 변환하기 / Convert another file</span>
+  </div>
+
+</main>
+
+<footer>
+  Piano Falling Notes — MusicXML to video converter &nbsp;|&nbsp;
+  Built with Python + Pillow + FFmpeg
+</footer>
+
+<script>
+  // ── State ────────────────────────────────────────
+  let selectedFile = null;
+  let currentJobId  = null;
+  let pollInterval  = null;
+
+  // ── Elements ─────────────────────────────────────
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const fileChosen  = document.getElementById('file-chosen');
+  const chosenName  = document.getElementById('chosen-name');
+  const convertBtn  = document.getElementById('convert-btn');
+  const progressCard = document.getElementById('progress-card');
+  const downloadCard = document.getElementById('download-card');
+  const progressBar = document.getElementById('progress-bar');
+  const statusLabel = document.getElementById('status-label');
+  const pctLabel    = document.getElementById('pct-label');
+  const statusDetail = document.getElementById('status-detail');
+  const errorBox    = document.getElementById('error-box');
+  const downloadBtn = document.getElementById('download-btn');
+  const restartLink = document.getElementById('restart-link');
+
+  // ── File selection ────────────────────────────────
+  fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['musicxml','mxl','xml'].includes(ext)) {
+      alert('MusicXML (.musicxml / .mxl) 파일만 지원됩니다.');
+      return;
+    }
+    selectedFile = file;
+    chosenName.textContent = file.name;
+    fileChosen.style.display = 'flex';
+    convertBtn.disabled = false;
+  }
+
+  // ── Status label helpers ──────────────────────────
+  const STATUS_LABELS = {
+    queued:    '대기 중… / Queued',
+    parsing:   '악보 분석 중… / Parsing MusicXML',
+    audio:     '오디오 생성 중… / Generating Audio',
+    rendering: '영상 렌더링 중… / Rendering Frames',
+    encoding:  '인코딩 중… / Encoding Video',
+    done:      '완료! / Done!',
+    error:     '오류 발생 / Error',
+  };
+
+  // ── Convert ───────────────────────────────────────
+  convertBtn.addEventListener('click', startConversion);
+
+  async function startConversion() {
+    if (!selectedFile) return;
+
+    // Reset UI
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+    downloadCard.style.display = 'none';
+    progressCard.style.display = 'block';
+    convertBtn.disabled = true;
+    progressBar.className = 'progress-bar indeterminate';
+    statusLabel.textContent = 'Uploading…';
+    pctLabel.textContent = '';
+    statusDetail.textContent = '';
+
+    // Build FormData
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('color_mode', document.getElementById('color_mode').value);
+    fd.append('resolution',  document.getElementById('resolution').value);
+    fd.append('fps',         document.getElementById('fps').value);
+    fd.append('glow',        document.getElementById('glow').checked  ? 'on' : 'off');
+    fd.append('audio',       document.getElementById('audio').checked ? 'on' : 'off');
+
+    try {
+      const res = await fetch('/convert', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      currentJobId = data.job_id;
+      pollStatus();
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  // ── Polling ───────────────────────────────────────
+  function pollStatus() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(fetchStatus, 1500);
+    fetchStatus();
+  }
+
+  async function fetchStatus() {
+    if (!currentJobId) return;
+    try {
+      const res  = await fetch(`/status/${currentJobId}`);
+      const data = await res.json();
+
+      const label = STATUS_LABELS[data.status] || data.status;
+      statusLabel.textContent = label;
+
+      if (data.status === 'rendering') {
+        const pct = data.progress || 0;
+        pctLabel.textContent = `${pct}%`;
+        progressBar.className = 'progress-bar';
+        progressBar.style.width = `${pct}%`;
+        statusDetail.textContent = `프레임 렌더링 / Frame rendering`;
+      } else if (data.status === 'done') {
+        clearInterval(pollInterval);
+        progressBar.className = 'progress-bar';
+        progressBar.style.width = '100%';
+        pctLabel.textContent = '100%';
+        statusDetail.textContent = '';
+        setTimeout(() => showDownload(data.output_url), 600);
+      } else if (data.status === 'error') {
+        clearInterval(pollInterval);
+        showError(data.error || '알 수 없는 오류');
+      } else {
+        // parsing / audio / encoding / queued — indeterminate
+        progressBar.className = 'progress-bar indeterminate';
+        pctLabel.textContent = '';
+      }
+    } catch (err) {
+      // network hiccup — keep polling
+    }
+  }
+
+  // ── Outcome helpers ───────────────────────────────
+  function showDownload(url) {
+    progressCard.style.display = 'none';
+    downloadCard.style.display = 'block';
+    downloadBtn.href = url;
+    convertBtn.disabled = false;
+  }
+
+  function showError(msg) {
+    progressBar.className = 'progress-bar';
+    progressBar.style.width = '0%';
+    errorBox.textContent = '오류: ' + msg;
+    errorBox.style.display = 'block';
+    convertBtn.disabled = false;
+  }
+
+  // ── Restart ───────────────────────────────────────
+  restartLink.addEventListener('click', () => {
+    if (pollInterval) clearInterval(pollInterval);
+    currentJobId = null;
+    selectedFile = null;
+    fileInput.value = '';
+    fileChosen.style.display = 'none';
+    chosenName.textContent = '';
+    convertBtn.disabled = true;
+    progressCard.style.display = 'none';
+    downloadCard.style.display = 'none';
+    errorBox.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressBar.className = 'progress-bar indeterminate';
+  });
+</script>
+
+</body>
+</html>

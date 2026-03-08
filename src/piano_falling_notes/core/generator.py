@@ -1,0 +1,115 @@
+import tempfile
+from pathlib import Path
+
+from PIL import Image
+from tqdm import tqdm
+from ..parser.musicxml_parser import parse_musicxml
+from ..timeline.builder import build_timeline
+from ..timeline.time_index import TimeIndex
+from ..rendering.layout import Layout
+from ..rendering.keyboard import KeyboardRenderer
+from ..rendering.notes import FallingNotesRenderer
+from ..rendering.effects import VisualEffects
+from ..rendering.colors import ColorScheme
+from ..export.video_writer import VideoWriter
+from ..export.audio import generate_audio, mux_video_audio
+from .config import Config
+
+
+class VideoGenerator:
+    def generate(self, config: Config) -> str:
+        """Generate falling notes video with audio. Returns output path."""
+        # 1. Parse MusicXML
+        print(f"Parsing: {config.input_path}")
+        notes, metadata = parse_musicxml(config.input_path)
+        print(f"  Found {len(notes)} notes, tempo={metadata['tempo_bpm']} BPM")
+
+        # 2. Build timeline
+        timeline = build_timeline(notes, metadata)
+        time_index = TimeIndex(timeline.notes)
+        print(f"  Timeline: {timeline.total_duration:.1f}s, {len(timeline.notes)} render notes")
+
+        # 3. Setup rendering
+        layout = Layout(
+            width=config.width, height=config.height, fps=config.fps,
+            keyboard_height_ratio=config.keyboard_height_ratio,
+            lookahead_seconds=config.lookahead_seconds,
+        )
+        color_scheme = ColorScheme(mode=config.color_mode)
+        keyboard = KeyboardRenderer(layout, color_scheme)
+        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys)
+        effects = VisualEffects()
+
+        # 4. Calculate total frames
+        lead_in = config.lead_in_seconds
+        total_time = timeline.total_duration + lead_in + config.tail_seconds
+        total_frames = int(total_time * layout.fps)
+
+        # 5. Generate audio
+        audio_path = None
+        if not config.no_audio:
+            try:
+                print("Generating audio...")
+                audio_path = str(Path(config.output_path).with_suffix('.wav'))
+                project_root = str(Path(__file__).resolve().parents[3])
+                generate_audio(config.input_path, audio_path, project_root)
+                print(f"  Audio: {audio_path}")
+            except Exception as e:
+                print(f"  Audio generation failed: {e}")
+                print("  Continuing without audio...")
+                audio_path = None
+
+        # 6. Render video frames
+        # If we have audio, render to temp file first, then mux
+        if audio_path:
+            video_only_path = str(Path(config.output_path).with_suffix('.video_only.mp4'))
+        else:
+            video_only_path = config.output_path
+
+        print(f"Rendering {total_frames} frames ({total_time:.1f}s @ {layout.fps}fps)...")
+
+        with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
+            for frame_idx in tqdm(range(total_frames), desc="Rendering"):
+                current_time = frame_idx / layout.fps - lead_in
+
+                # Background
+                frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
+
+                # Query visible notes
+                view_start = current_time
+                view_end = current_time + layout.lookahead_seconds
+                visible = time_index.query(view_start, view_end)
+
+                # Draw falling notes
+                frame = falling.render(frame, visible, current_time)
+
+                # Find currently playing notes (for keyboard highlighting)
+                active = {}
+                for n in visible:
+                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds:
+                        active[n.midi_number] = n.velocity
+
+                # Glow effects at keyboard line
+                if config.glow_enabled and active:
+                    frame = effects.apply_note_glow(
+                        frame, active, keyboard.keys,
+                        layout.keyboard_top, color_scheme,
+                    )
+
+                # Render keyboard (paste at bottom)
+                kb_img = keyboard.render(active)
+                frame.paste(kb_img, (0, layout.keyboard_top))
+
+                writer.write_frame(frame)
+
+        # 7. Mux audio if available
+        if audio_path:
+            print("Muxing video + audio...")
+            mux_video_audio(video_only_path, audio_path, config.output_path,
+                            audio_offset=lead_in)
+            # Cleanup temp files
+            Path(video_only_path).unlink(missing_ok=True)
+            Path(audio_path).unlink(missing_ok=True)
+
+        print(f"Done! Output: {config.output_path}")
+        return config.output_path

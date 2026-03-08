@@ -1,0 +1,32 @@
+# Piano Falling Notes - Default Configuration
+# PianiCast style
+
+# Video
+width: 1920
+height: 1080
+fps: 60
+crf: 18
+
+# Layout
+keyboard_height_ratio: 0.15
+lookahead_seconds: 3.0
+
+# Colors (PianiCast style)
+background_color: [15, 15, 20]
+color_mode: pitch_range
+note_opacity: 0.95
+
+# Keyboard
+white_key_color: [240, 240, 240]
+black_key_color: [30, 30, 30]
+active_key_glow: true
+
+# Effects
+glow_enabled: true
+glow_intensity: 0.7
+particles_enabled: false
+note_border_radius: 4.0
+
+# Timing
+lead_in_seconds: 2.0
+tail_seconds: 2.0
