@@ -36,6 +36,11 @@ def main():
         config.no_audio = True
     if args.color_mode:
         config.color_mode = args.color_mode
+    if args.theme:
+        config.theme = args.theme
+    if args.background:
+        hex_str = args.background.lstrip('#')
+        config.custom_background = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
 
     # Generate
     generator = VideoGenerator()

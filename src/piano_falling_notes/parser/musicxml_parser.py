@@ -3,6 +3,7 @@ import music21.note
 import music21.chord
 import music21.tempo
 import music21.meter
+import music21.key
 
 from .models import NoteEvent
 
@@ -62,12 +63,38 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
         measures = part.getElementsByClass("Measure")
         total_measures = max(total_measures, len(measures))
 
+    # key signature analysis
+    key_signature = "C major"
+    key_mode = "major"
+    # Try explicit key signature first
+    for el in score.flatten().getElementsByClass(music21.key.KeySignature):
+        if hasattr(el, 'asKey'):
+            k = el.asKey()
+            key_signature = str(k)
+            key_mode = k.mode
+            break
+    for el in score.flatten().getElementsByClass(music21.key.Key):
+        key_signature = str(el)
+        key_mode = el.mode
+        break
+    # Fallback: algorithmic analysis
+    if key_signature == "C major":
+        try:
+            analyzed = score.analyze('key')
+            if analyzed:
+                key_signature = str(analyzed)
+                key_mode = analyzed.mode
+        except Exception:
+            pass
+
     metadata = {
         "title": title,
         "tempo_bpm": tempo_bpm,
         "divisions": divisions,
         "time_signature": time_signature,
         "total_measures": total_measures,
+        "key_signature": key_signature,
+        "key_mode": key_mode,
     }
 
     # --- notes ---

@@ -442,12 +442,28 @@
     <div class="options-grid">
 
       <div class="option-group">
-        <label for="color_mode">색상 모드 / Color Mode</label>
-        <select id="color_mode" name="color_mode">
-          <option value="rainbow_octave">Rainbow Octave</option>
-          <option value="pitch_range">Pitch Range</option>
-          <option value="part_based">Part Based</option>
+        <label for="theme">테마 / Theme</label>
+        <select id="theme" name="theme">
+          <option value="auto">Auto (음원 분석)</option>
+          <option value="classic">Classic (기본)</option>
+          <option value="midnight">Midnight (단조)</option>
+          <option value="sunset">Sunset (장조)</option>
+          <option value="ocean">Ocean (느린 곡)</option>
+          <option value="neon">Neon (빠른 곡)</option>
+          <option value="pastel">Pastel (파스텔)</option>
         </select>
+      </div>
+
+      <div class="option-group">
+        <label for="custom_bg">배경색 / Background</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="color" id="custom_bg" name="custom_bg" value="#0F0F14" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
+          <label class="toggle" style="margin:0;">
+            <input type="checkbox" id="custom_bg_enabled" />
+            <div class="toggle-track"></div>
+          </label>
+          <span style="font-size:0.78rem; color:var(--muted);">커스텀</span>
+        </div>
       </div>
 
       <div class="option-group">
@@ -611,7 +627,11 @@
     // Build FormData
     const fd = new FormData();
     fd.append('file', selectedFile);
-    fd.append('color_mode', document.getElementById('color_mode').value);
+    fd.append('theme',       document.getElementById('theme').value);
+    fd.append('color_mode',  'rainbow_octave');
+    if (document.getElementById('custom_bg_enabled').checked) {
+      fd.append('custom_bg', document.getElementById('custom_bg').value);
+    }
     fd.append('resolution',  document.getElementById('resolution').value);
     fd.append('fps',         document.getElementById('fps').value);
     fd.append('glow',        document.getElementById('glow').checked  ? 'on' : 'off');

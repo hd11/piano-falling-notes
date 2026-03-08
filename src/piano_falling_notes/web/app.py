@@ -203,6 +203,16 @@ def convert():
     if color_mode in ('rainbow_octave', 'pitch_range', 'part_based'):
         config.color_mode = color_mode
 
+    theme = request.form.get('theme', 'auto')
+    from ..rendering.themes import THEME_NAMES
+    if theme in THEME_NAMES or theme == 'auto':
+        config.theme = theme
+
+    custom_bg = request.form.get('custom_bg', '').strip()
+    if custom_bg and custom_bg.startswith('#') and len(custom_bg) == 7:
+        h = custom_bg.lstrip('#')
+        config.custom_background = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
     resolution = request.form.get('resolution', '1080p')
     if resolution == '720p':
         config.width = 1280

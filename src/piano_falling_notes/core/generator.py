@@ -11,6 +11,7 @@ from ..rendering.keyboard import KeyboardRenderer
 from ..rendering.notes import FallingNotesRenderer
 from ..rendering.effects import VisualEffects
 from ..rendering.colors import ColorScheme
+from ..rendering.themes import THEMES, auto_select_theme
 from ..export.video_writer import VideoWriter
 from ..export.audio import generate_audio, mux_video_audio
 from .config import Config
@@ -29,13 +30,26 @@ class VideoGenerator:
         time_index = TimeIndex(timeline.notes)
         print(f"  Timeline: {timeline.total_duration:.1f}s, {len(timeline.notes)} render notes")
 
-        # 3. Setup rendering
+        # 3. Apply theme
+        if config.theme == "auto":
+            theme = auto_select_theme(metadata)
+            print(f"  Auto theme: {theme.label} (key={metadata.get('key_signature', '?')}, tempo={metadata['tempo_bpm']})")
+        elif config.theme in THEMES:
+            theme = THEMES[config.theme]
+            print(f"  Theme: {theme.label}")
+        else:
+            theme = THEMES["classic"]
+
+        bg = config.custom_background if config.custom_background else theme.background_color
+        config.background_color = bg
+
+        # 4. Setup rendering
         layout = Layout(
             width=config.width, height=config.height, fps=config.fps,
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette)
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys)
         effects = VisualEffects()

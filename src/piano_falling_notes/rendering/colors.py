@@ -19,8 +19,9 @@ CHROMATIC_COLORS = [
 
 
 class ColorScheme:
-    def __init__(self, mode: str = "pitch_range"):
+    def __init__(self, mode: str = "pitch_range", palette: tuple | None = None):
         self.mode = mode
+        self.palette = palette  # custom 12-color palette overrides CHROMATIC_COLORS
 
     def note_color(self, midi_number: int, velocity: float = 1.0, part_index: int = 0) -> tuple[int, int, int, int]:
         """Return RGBA color for a note."""
@@ -42,7 +43,8 @@ class ColorScheme:
     def _rainbow_color(self, midi_number: int, velocity: float) -> tuple[int, int, int, int]:
         """Chromatic colors: each semitone gets a distinct vivid color."""
         note_in_octave = midi_number % 12
-        base = CHROMATIC_COLORS[note_in_octave]
+        colors = self.palette if self.palette else CHROMATIC_COLORS
+        base = colors[note_in_octave]
         # Slightly adjust brightness by octave (higher octave = brighter)
         octave = (midi_number - 21) // 12
         brightness = 0.75 + octave * 0.07  # 0.75 ~ 1.0+

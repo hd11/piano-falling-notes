@@ -24,6 +24,8 @@ class Config:
     background_color: tuple = (15, 15, 20)
     color_mode: str = "rainbow_octave"
     note_opacity: float = 0.95
+    theme: str = "auto"
+    custom_background: tuple | None = None
 
     # Keyboard
     white_key_color: tuple = (240, 240, 240)

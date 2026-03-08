@@ -16,6 +16,8 @@ def parse_args():
     parser.add_argument('--crf', type=int, default=None)
     parser.add_argument('--lookahead', type=float, default=None, dest='lookahead_seconds')
     parser.add_argument('--color-mode', default=None, choices=['pitch_range', 'rainbow_octave', 'part_based'])
+    parser.add_argument('--theme', default=None, choices=['auto', 'classic', 'midnight', 'sunset', 'ocean', 'neon', 'pastel'])
+    parser.add_argument('--background', default=None, help='Custom background color hex (e.g. #0F0F14)')
     parser.add_argument('--no-glow', action='store_true', help='Disable glow effects')
     parser.add_argument('--no-audio', action='store_true', help='Disable audio generation')
     parser.add_argument('--glow-intensity', type=float, default=None)

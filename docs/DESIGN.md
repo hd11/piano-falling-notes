@@ -96,10 +96,45 @@ MusicXML → 파싱 → NoteEvent 리스트 → 타임라인 변환 →
 - **활성 상태 (노트 타격 시):** 해당 노트 색상으로 건반 색 변환 + 글로우 이펙트
 - 기본 건반 이미지 캐싱, 활성 키만 오버레이
 
-## 색상 체계
-- **pitch_range** (기본): MIDI 번호 기반 HSV 그라데이션 (저음=따뜻, 고음=차가운 색)
-- rainbow_octave: 옥타브별 무지개
-- part_based: 파트별 색상 구분
+## 색상 체계 및 테마
+
+### 색상 모드
+- **rainbow_octave** (기본): 크로매틱 12음 팔레트 - 반음 단위 고유 색상
+- **pitch_range**: MIDI 번호 기반 HSV 그라데이션 (저음=따뜻, 고음=차가운 색)
+
+### 테마 프리셋 (자동 선택 또는 수동 지정)
+| 테마 | 배경색 | 팔레트 특성 | 자동 선택 조건 |
+|------|--------|-------------|---------------|
+| **auto** | 음원 분석 | 자동 결정 | 기본값 |
+| classic | `(15,15,20)` 다크 그레이 | 비비드 레인보우 | - |
+| midnight | `(8,8,24)` 딥 네이비 | 블루/퍼플 계열 | 단조(minor) |
+| sunset | `(25,12,15)` 다크 웜 | 레드/오렌지/골드 | 장조(major) |
+| ocean | `(6,16,24)` 다크 틸 | 시안/블루/그린 | 느린 곡 (<72 BPM) |
+| neon | `(3,3,8)` 퓨어 블랙 | 비비드 네온 | 빠른 곡 (>140 BPM) |
+| pastel | `(18,16,22)` 소프트 다크 | 파스텔 톤 | - |
+
+### 자동 테마 선택 로직
+1. 악보에서 조성(key signature) 자동 분석 (music21 `analyze('key')`)
+2. 템포(BPM) 분석
+3. 규칙: 빠른 곡→neon, 느린 곡→ocean, 단조→midnight, 장조→sunset
+
+### 사용자 커스터마이징
+- CLI: `--theme`, `--background #hex` 옵션
+- 웹 UI: 테마 드롭다운 + 배경색 컬러 피커
+
+## 오디오 파이프라인
+```
+MusicXML → MIDI (music21) → WAV (fluidsynth + soundfont) → AAC mux (FFmpeg)
+```
+- 사운드폰트: TimGM6mb.sf2 (General MIDI, 5.8MB)
+- 오디오 오프셋: lead_in_seconds만큼 지연 (영상과 동기화)
+
+## 웹 UI
+- Flask 기반 단일 페이지 앱
+- 드래그앤드롭 파일 업로드 (.musicxml, .mxl)
+- 실시간 변환 진행률 표시 (파싱 → 오디오 → 렌더링 → 인코딩)
+- 옵션: 테마, 배경색, 해상도, FPS, 글로우, 오디오
+- 백그라운드 스레드 변환 + 1시간 후 자동 정리
 
 ## 기술 스택
 | 컴포넌트 | 라이브러리 | 근거 |
@@ -155,25 +190,47 @@ MusicXML → 파싱 → NoteEvent 리스트 → 타임라인 변환 →
 - [x] 색상 개선: 크로매틱 12음 팔레트 (PianiCast 스타일)
 - [x] 글로우 효과 강화 (가우시안 블러 배치 처리)
 
-### Phase 3: 테스트/검증 - 완료
-- [x] Golden.musicxml → Golden_v2.mp4 생성 성공 (720p, 30fps)
-- [x] 시각적 품질 확인: 색상 다양성, 건반 활성화, 글로우 효과 확인
-- [x] 렌더링 성능: ~30-90 it/s (720p@30fps), 5600 프레임 약 2분
+### Phase 3: 오디오 + 레퍼런스 악보 - 완료
+- [x] 양손 레퍼런스 악보 테스트 (Golden_ref.mxl: 590+911=1501노트, 2파트)
+- [x] 오디오 파이프라인 구현 (MusicXML→MIDI→WAV→AAC mux)
+- [x] fluidsynth + TimGM6mb.sf2 사운드폰트 연동
+- [x] 88건반 정확도 검증 (52 흰건반 + 36 검은건반)
+- [x] 글로우 이펙트 최적화 (전체 이미지 RGBA → numpy 로컬 스트립 40px)
+
+### Phase 4: 웹 UI - 완료
+- [x] Flask 웹 서버 구현 (드래그앤드롭 업로드, 백그라운드 변환)
+- [x] 옵션 패널 (색상 모드, 해상도, FPS, 글로우, 오디오)
+- [x] 실시간 진행률 표시 + MP4 다운로드
+- [x] 다크 테마 UI (한국어/영어 병행)
+
+### Phase 5: 테마 시스템 - 완료
+- [x] 6개 테마 프리셋 (classic, midnight, sunset, ocean, neon, pastel)
+- [x] 음원 자동 분석 (조성 + 템포) → 테마 자동 선택
+- [x] 웹 UI 테마 드롭다운 + 배경색 커스텀 컬러 피커
+- [x] CLI --theme, --background 옵션 추가
+- [x] Golden_ref.mxl 테스트: G major, 122 BPM → Sunset 테마 자동 선택
 
 ### 사용법
 ```bash
 # 가상환경 활성화
 source .venv/bin/activate
 
-# 기본 사용 (1080p, 60fps)
+# 기본 사용 (1080p, 60fps, 자동 테마)
 python -m piano_falling_notes input.musicxml -o output.mp4
+
+# 테마 지정
+python -m piano_falling_notes input.musicxml --theme neon
+python -m piano_falling_notes input.musicxml --theme midnight
+
+# 배경색 커스텀
+python -m piano_falling_notes input.musicxml --theme classic --background "#1A0A2E"
 
 # 빠른 미리보기 (720p, 30fps)
 python -m piano_falling_notes input.musicxml -o preview.mp4 --width 1280 --height 720 --fps 30
 
-# 색상 모드 변경
-python -m piano_falling_notes input.musicxml --color-mode pitch_range
+# 오디오 없이 빠른 렌더링
+python -m piano_falling_notes input.musicxml --no-audio
 
-# 글로우 비활성화
-python -m piano_falling_notes input.musicxml --no-glow
+# 웹 서버 시작
+python -m piano_falling_notes --web --port 5000
 ```
