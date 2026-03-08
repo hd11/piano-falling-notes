@@ -39,6 +39,12 @@ def main():
     if args.note_color:
         hex_str = args.note_color.lstrip('#')
         config.single_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    if args.white_key_color:
+        hex_str = args.white_key_color.lstrip('#')
+        config.white_key_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    if args.black_key_color:
+        hex_str = args.black_key_color.lstrip('#')
+        config.black_key_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
     if args.note_style:
         config.note_style = args.note_style
     if args.no_neon_burst:

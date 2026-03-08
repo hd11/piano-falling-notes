@@ -50,11 +50,15 @@ class ColorScheme:
         mode: str = "pitch_range",
         palette: tuple | None = None,
         single_color: tuple = (0, 210, 210),
+        white_key_note_color: tuple = (0, 255, 128),
+        black_key_note_color: tuple = (0, 128, 255),
     ):
         canonical = _MODE_ALIASES.get(mode, mode)
         self.mode = canonical
         self.palette = palette  # custom 12-color palette overrides CHROMATIC_COLORS
         self.single_color = single_color
+        self.white_key_note_color = white_key_note_color
+        self.black_key_note_color = black_key_note_color
 
     def note_color(self, midi_number: int, velocity: float = 1.0, part_index: int = 0) -> tuple[int, int, int, int]:
         """Return RGBA color for a note."""
@@ -69,6 +73,8 @@ class ColorScheme:
             return self._part_color(part_index, velocity)
         elif mode == "pitch_range":
             return self._pitch_range_color(midi_number, velocity)
+        elif mode == "key_type":
+            return self._key_type_color(midi_number, velocity)
         # Default fallback
         return self._single_color(velocity)
 
@@ -118,6 +124,16 @@ class ColorScheme:
     def _part_color(self, part_index: int, velocity: float) -> tuple[int, int, int, int]:
         """Distinct color per part, brightness modulated by velocity."""
         base = _PART_COLORS[part_index % len(_PART_COLORS)]
+        brightness = 0.7 + velocity * 0.3
+        r = min(255, int(base[0] * brightness))
+        g = min(255, int(base[1] * brightness))
+        b = min(255, int(base[2] * brightness))
+        return (r, g, b, 255)
+
+    def _key_type_color(self, midi_number: int, velocity: float) -> tuple[int, int, int, int]:
+        """Green for white keys, blue for black keys, brightness modulated by velocity."""
+        is_black = (midi_number % 12) in {1, 3, 6, 8, 10}
+        base = self.black_key_note_color if is_black else self.white_key_note_color
         brightness = 0.7 + velocity * 0.3
         r = min(255, int(base[0] * brightness))
         g = min(255, int(base[1] * brightness))

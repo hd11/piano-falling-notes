@@ -1,3 +1,4 @@
+import numpy as np
 from PIL import Image, ImageDraw
 
 from .layout import Layout
@@ -96,37 +97,75 @@ class FallingNotesRenderer:
                 draw.rounded_rectangle(rect, radius=CORNER_RADIUS, fill=color_rgb)
             else:
                 draw.rounded_rectangle(rect, radius=CORNER_RADIUS, fill=color_rgb)
-                pixels = img.load()
                 x0i, y0i, x1i, y1i = rect
+                # Clamp region to actual image bounds
+                gx0 = max(0, x0i)
+                gy0 = max(0, y0i)
+                gx1 = min(img.width, x1i)
+                gy1 = min(img.height, y1i)
+                if gx1 <= gx0 or gy1 <= gy0:
+                    continue
+
+                # Extract region as numpy array (H, W, channels)
+                region = np.array(img.crop((gx0, gy0, gx1, gy1)), dtype=np.float32)
+
+                # Build mask: pixels that match color_rgb (rounded rect area vs background)
+                cr, cg, cb = color_rgb
+                mask = (
+                    (region[:, :, 0] == cr) &
+                    (region[:, :, 1] == cg) &
+                    (region[:, :, 2] == cb)
+                )  # shape (H, W), bool
+
+                # Build vertical gradient: t=0 at top, t=1 at bottom
+                h_region = gy1 - gy0
+                row_offsets = np.arange(gy0, gy1, dtype=np.float32) - y0i
+                t = row_offsets / max(note_h - 1, 1)
+                # Full-height gradient: white at top (t=0) fading to pure color at bottom (t=1)
+                white_mix = (0.7 * (1.0 - t)).reshape(h_region, 1)  # (H, 1)
+
+                # Gradient target colors broadcast over width
+                base_r = cr * (1.0 - white_mix) + 255.0 * white_mix  # (H, 1)
+                base_g = cg * (1.0 - white_mix) + 255.0 * white_mix
+                base_b = cb * (1.0 - white_mix) + 255.0 * white_mix
+
+                # Stack to (H, 1, 3) for broadcasting against (H, W, 3)
+                gradient = np.stack([base_r, base_g, base_b], axis=2)  # (H, 1, 3)
+
                 if self.glitter:
-                    import math
                     seed = note.midi_number * 137 + int(note.start_seconds * 100)
-                for gy in range(max(0, y0i), min(img.height, y1i)):
-                    t = (gy - y0i) / max(note_h - 1, 1)
-                    # Full-height gradient: white at top (t=0) fading to pure color at bottom (t=1)
-                    white_mix = 0.7 * (1.0 - t)
-                    base_r = color_rgb[0] * (1.0 - white_mix) + 255 * white_mix
-                    base_g = color_rgb[1] * (1.0 - white_mix) + 255 * white_mix
-                    base_b = color_rgb[2] * (1.0 - white_mix) + 255 * white_mix
-                    for gx in range(max(0, x0i), min(img.width, x1i)):
-                        px = pixels[gx, gy]
-                        if px[0] == color_rgb[0] and px[1] == color_rgb[1] and px[2] == color_rgb[2]:
-                            sparkle = 0.0
-                            if self.glitter:
-                                rel_y = gy - y0i
-                                h = ((gx * 2654435761) ^ (rel_y * 2246822519) ^ (seed * 3266489917)) & 0xFFFFFFFF
-                                sv = (h >> 8) & 0xFF
-                                if sv > 200:
-                                    phase = (h & 0xFF) / 255.0 * 6.283
-                                    twinkle = 0.5 + 0.5 * math.sin(current_time * 6.0 + phase)
-                                    if sv > 235:
-                                        sparkle = (sv - 235) / 20.0 * 120 * twinkle
-                                    else:
-                                        sparkle = (sv - 200) / 35.0 * 35 * twinkle
-                            nr = min(255, int(base_r + sparkle))
-                            ng = min(255, int(base_g + sparkle))
-                            nb = min(255, int(base_b + sparkle))
-                            pixels[gx, gy] = (nr, ng, nb)
+                    w_region = gx1 - gx0
+                    # Vectorized hash: shape (H, W) using uint32 arithmetic
+                    gx_arr = np.arange(gx0, gx1, dtype=np.uint32)                      # (W,)
+                    gy_arr = np.arange(gy0, gy1, dtype=np.uint32) - np.uint32(y0i)    # (H,) rel_y
+                    seed_u32 = np.uint32(seed)
+                    # Broadcast: (H, 1) ^ (1, W) ^ scalar
+                    hval = (
+                        (gx_arr[np.newaxis, :] * np.uint32(2654435761)) ^
+                        (gy_arr[:, np.newaxis] * np.uint32(2246822519)) ^
+                        (seed_u32 * np.uint32(3266489917))
+                    )  # (H, W), uint32
+                    sv = ((hval >> np.uint32(8)) & np.uint32(0xFF)).astype(np.float32)  # (H, W)
+                    phase_raw = (hval & np.uint32(0xFF)).astype(np.float32) / 255.0 * 6.283
+                    twinkle = 0.5 + 0.5 * np.sin(current_time * 6.0 + phase_raw)  # (H, W)
+
+                    sparkle = np.zeros((h_region, w_region), dtype=np.float32)
+                    hi_mask = sv > 235
+                    lo_mask = (sv > 200) & ~hi_mask
+                    sparkle[hi_mask] = (sv[hi_mask] - 235.0) / 20.0 * 120.0 * twinkle[hi_mask]
+                    sparkle[lo_mask] = (sv[lo_mask] - 200.0) / 35.0 * 35.0 * twinkle[lo_mask]
+                    # Add sparkle only where mask is true; shape (H, W, 1) for broadcast
+                    sparkle_3d = (sparkle * mask)[:, :, np.newaxis]
+                    gradient = gradient + sparkle_3d
+
+                # Apply gradient to masked pixels; non-masked pixels keep original values
+                mask_3d = mask[:, :, np.newaxis]  # (H, W, 1)
+                result = np.where(mask_3d, np.clip(gradient, 0, 255), region)
+                result_uint8 = result.astype(np.uint8)
+
+                # Write back to image
+                patch = Image.fromarray(result_uint8, mode=img.mode)
+                img.paste(patch, (gx0, gy0))
 
         # Draw guide lines AFTER notes so they're always visible on top
         if self.guide_lines:

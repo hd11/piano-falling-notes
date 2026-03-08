@@ -97,7 +97,7 @@ def run_conversion(job_id, input_path, config):
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette, single_color=config.single_note_color)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette, single_color=config.single_note_color, white_key_note_color=config.white_key_note_color, black_key_note_color=config.black_key_note_color)
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
@@ -250,13 +250,23 @@ def convert():
     config.input_path = input_path
 
     color_mode = request.form.get('color_mode', 'single')
-    if color_mode in ('single', 'rainbow', 'neon', 'part'):
+    if color_mode in ('single', 'rainbow', 'neon', 'part', 'key_type'):
         config.color_mode = color_mode
 
     single_color = request.form.get('single_note_color', '').strip()
     if single_color and single_color.startswith('#') and len(single_color) == 7:
         h = single_color.lstrip('#')
         config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    white_key_color_hex = request.form.get('white_key_note_color', '').strip()
+    if white_key_color_hex and white_key_color_hex.startswith('#') and len(white_key_color_hex) == 7:
+        h = white_key_color_hex.lstrip('#')
+        config.white_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+    black_key_color_hex = request.form.get('black_key_note_color', '').strip()
+    if black_key_color_hex and black_key_color_hex.startswith('#') and len(black_key_color_hex) == 7:
+        h = black_key_color_hex.lstrip('#')
+        config.black_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
     theme = request.form.get('theme', 'auto')
     from ..rendering.themes import THEME_NAMES
@@ -360,13 +370,23 @@ def preview():
 
         # Parse form options (same as /convert)
         color_mode = request.form.get('color_mode', 'single')
-        if color_mode in ('single', 'rainbow', 'neon', 'part'):
+        if color_mode in ('single', 'rainbow', 'neon', 'part', 'key_type'):
             config.color_mode = color_mode
 
         single_color = request.form.get('single_note_color', '').strip()
         if single_color and single_color.startswith('#') and len(single_color) == 7:
             h = single_color.lstrip('#')
             config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+        white_key_color_hex = request.form.get('white_key_note_color', '').strip()
+        if white_key_color_hex and white_key_color_hex.startswith('#') and len(white_key_color_hex) == 7:
+            h = white_key_color_hex.lstrip('#')
+            config.white_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+        black_key_color_hex = request.form.get('black_key_note_color', '').strip()
+        if black_key_color_hex and black_key_color_hex.startswith('#') and len(black_key_color_hex) == 7:
+            h = black_key_color_hex.lstrip('#')
+            config.black_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
         theme = request.form.get('theme', 'auto')
         from ..rendering.themes import THEME_NAMES
@@ -403,7 +423,9 @@ def preview():
                         keyboard_height_ratio=config.keyboard_height_ratio,
                         lookahead_seconds=config.lookahead_seconds)
         color_scheme = ColorScheme(mode=config.color_mode, palette=theme_obj.palette,
-                                   single_color=config.single_note_color)
+                                   single_color=config.single_note_color,
+                                   white_key_note_color=config.white_key_note_color,
+                                   black_key_note_color=config.black_key_note_color)
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,

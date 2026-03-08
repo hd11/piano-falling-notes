@@ -462,8 +462,19 @@
             <option value="rainbow">여러색</option>
             <option value="neon">네온</option>
             <option value="part">파트별</option>
+            <option value="key_type">건반별 (흰/검)</option>
           </select>
           <input type="color" id="single_note_color" value="#00D2D2" title="노트 색상 선택" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
+        </div>
+        <div id="key_type_colors" style="display:none; margin-top:8px; gap:12px; align-items:center;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label for="white_key_note_color" style="font-size:0.78rem; color:var(--muted); margin:0;">흰건반</label>
+            <input type="color" id="white_key_note_color" value="#00FF80" title="흰건반 노트 색상" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label for="black_key_note_color" style="font-size:0.78rem; color:var(--muted); margin:0;">검은건반</label>
+            <input type="color" id="black_key_note_color" value="#0080FF" title="검은건반 노트 색상" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
+          </div>
         </div>
       </div>
 
@@ -632,11 +643,13 @@
   const downloadBtn = document.getElementById('download-btn');
   const restartLink = document.getElementById('restart-link');
 
-  // ── Single color picker visibility ───────────────
+  // ── Color picker visibility ───────────────────────
   const colorMode = document.getElementById('color_mode');
   const singleColorPicker = document.getElementById('single_note_color');
+  const keyTypeColors = document.getElementById('key_type_colors');
   colorMode.addEventListener('change', () => {
     singleColorPicker.style.display = colorMode.value === 'single' ? '' : 'none';
+    keyTypeColors.style.display = colorMode.value === 'key_type' ? 'flex' : 'none';
   });
 
   // ── File selection ────────────────────────────────
@@ -706,6 +719,10 @@
     if (document.getElementById('color_mode').value === 'single') {
       fd.append('single_note_color', document.getElementById('single_note_color').value);
     }
+    if (document.getElementById('color_mode').value === 'key_type') {
+      fd.append('white_key_note_color', document.getElementById('white_key_note_color').value);
+      fd.append('black_key_note_color', document.getElementById('black_key_note_color').value);
+    }
     fd.append('note_style',  document.getElementById('note_style').value);
     fd.append('neon_burst',  document.getElementById('neon_burst').checked  ? 'on' : 'off');
     fd.append('guide_lines', document.getElementById('guide_lines').checked ? 'on' : 'off');
@@ -742,6 +759,10 @@
     fd.append('color_mode',  document.getElementById('color_mode').value);
     if (document.getElementById('color_mode').value === 'single') {
       fd.append('single_note_color', document.getElementById('single_note_color').value);
+    }
+    if (document.getElementById('color_mode').value === 'key_type') {
+      fd.append('white_key_note_color', document.getElementById('white_key_note_color').value);
+      fd.append('black_key_note_color', document.getElementById('black_key_note_color').value);
     }
     if (document.getElementById('custom_bg_enabled').checked) {
       fd.append('custom_bg', document.getElementById('custom_bg').value);
