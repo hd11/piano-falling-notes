@@ -50,6 +50,11 @@ class VisualEffects:
         arr[strip_top:strip_bottom] = strip
         return Image.fromarray(arr)
 
+    def __init__(self):
+        # Neon burst decay state: {midi_number: (color_array, intensity, cx, burst_half_w)}
+        self._burst_state = {}
+        self._burst_decay = 0.45  # decay factor per frame (3-frame visible burst)
+
     def apply_neon_burst(
         self,
         img: Image.Image,
@@ -58,59 +63,65 @@ class VisualEffects:
         keyboard_top: int,
         color_scheme,
     ) -> Image.Image:
-        """PianiCast-style neon burst: bright radial flash at key-strike point."""
-        if not newly_active:
-            return img
-
-        above = 60
-        below = 20
-        strip_top = max(0, keyboard_top - above)
-        strip_bottom = min(img.height, keyboard_top + below)
-
-        arr = np.array(img)
-        strip = arr[strip_top:strip_bottom].astype(np.float32)
-        h = strip_bottom - strip_top
-        # Row indices relative to strip; centre row is at index `above` (keyboard_top row)
-        centre_row = keyboard_top - strip_top  # rows 0..h-1
-
-        rows = np.arange(h, dtype=np.float32)
-
+        """PianiCast-style neon burst: bright radial flash at key-strike point with multi-frame decay."""
+        # Add new bursts to state
         for midi, velocity in newly_active.items():
             key = key_map.get(midi)
             if key is None:
                 continue
-
             color = color_scheme.note_color_rgb(midi, velocity)
-            # Boost to maximum brightness while preserving hue
             c = np.array(color, dtype=np.float32)
             max_c = c.max()
             if max_c > 0:
                 c = c * (255.0 / max_c)
-
-            intensity = 0.4 + velocity * 0.6  # 0.4–1.0 range
-
+            intensity = 0.5 + velocity * 0.5
             cx = key.x + key.width / 2.0
-            burst_half_w = key.width  # 2x key width total
+            burst_half_w = key.width * 1.5  # 3x key width total spread
+            self._burst_state[midi] = (c, intensity, cx, burst_half_w)
+
+        if not self._burst_state:
+            return img
+
+        # Render all active bursts (new + decaying)
+        above = 100  # taller strip for more visible burst
+        strip_top = max(0, keyboard_top - above)
+        strip_bottom = keyboard_top  # stop at keyboard — paste overwrites below
+
+        arr = np.array(img)
+        strip = arr[strip_top:strip_bottom].astype(np.float32)
+        h = strip_bottom - strip_top
+        centre_row = h  # burst centre at bottom edge (keyboard line)
+        rows = np.arange(h, dtype=np.float32)
+
+        expired = []
+        for midi, (c, intensity, cx, burst_half_w) in self._burst_state.items():
             x0 = max(0, int(cx - burst_half_w))
             x1 = min(img.width, int(cx + burst_half_w))
             if x0 >= x1:
+                expired.append(midi)
                 continue
 
             cols = np.arange(x0, x1, dtype=np.float32)
 
-            # Radial distance from burst centre for each (row, col)
-            dy = (rows - centre_row) / max(above, 1)          # shape (h,)
-            dx = (cols - cx) / max(burst_half_w, 1)           # shape (x1-x0,)
-            # Broadcast to (h, width) grid
-            dist2 = dy[:, np.newaxis] ** 2 + dx[np.newaxis, :] ** 2  # (h, w)
+            dy = (rows - centre_row) / max(above * 0.6, 1)
+            dx = (cols - cx) / max(burst_half_w, 1)
+            dist2 = dy[:, np.newaxis] ** 2 + dx[np.newaxis, :] ** 2
 
-            # Gaussian radial falloff; sigma=0.45 keeps burst tight
-            radial = np.exp(-dist2 / (2 * 0.45 ** 2)) * intensity  # (h, w)
-
-            burst_light = radial[:, :, np.newaxis] * c[np.newaxis, np.newaxis, :]  # (h, w, 3)
+            radial = np.exp(-dist2 / (2 * 0.5 ** 2)) * intensity
+            burst_light = radial[:, :, np.newaxis] * c[np.newaxis, np.newaxis, :]
 
             region = strip[:, x0:x1, :]
             strip[:, x0:x1, :] = np.minimum(region + burst_light, 255.0)
+
+            # Decay intensity for next frame
+            new_intensity = intensity * self._burst_decay
+            if new_intensity < 0.05:
+                expired.append(midi)
+            else:
+                self._burst_state[midi] = (c, new_intensity, cx, burst_half_w)
+
+        for midi in expired:
+            self._burst_state.pop(midi, None)
 
         strip = np.clip(strip, 0, 255).astype(np.uint8)
         arr[strip_top:strip_bottom] = strip

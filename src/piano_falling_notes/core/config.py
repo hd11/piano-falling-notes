@@ -41,7 +41,7 @@ class Config:
     neon_burst: bool = True  # neon burst on key strike
     guide_lines: bool = True  # background guide lines
     note_style: str = "standard"  # "standard" or "djeq" (DJ EQ Max visualization)
-    note_duration_ratio: float = 0.95  # visual shortening ratio for note separation
+    note_duration_ratio: float = 0.92  # visual shortening ratio for note separation
 
     # Timing
     lead_in_seconds: float = 2.0

@@ -26,12 +26,14 @@ class FallingNotesRenderer:
         self.guide_lines = guide_lines
 
     def render_guide_lines(self, img: Image.Image) -> None:
-        """Draw faint vertical lines at white key boundaries."""
+        """Draw faint vertical lines at octave boundaries (C notes only)."""
         draw = ImageDraw.Draw(img)
         keyboard_top = self.layout.keyboard_top
-        for key in self.key_map.values():
-            x = key.x
-            draw.line([(x, 0), (x, keyboard_top)], fill=GUIDE_LINE_COLOR, width=1)
+        # Only draw lines at C notes (midi % 12 == 0) — octave boundaries
+        for midi, key in self.key_map.items():
+            if midi % 12 == 0:  # C notes: C1=24, C2=36, C3=48, C4=60, ...
+                x = int(key.x)
+                draw.line([(x, 0), (x, keyboard_top)], fill=GUIDE_LINE_COLOR, width=1)
 
     def render(self, img: Image.Image, visible_notes: list, current_time: float) -> Image.Image:
         """Draw falling note bars onto img and return it.
