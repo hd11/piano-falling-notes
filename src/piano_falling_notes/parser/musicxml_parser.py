@@ -38,22 +38,35 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
         # music21 maps <movement-title> to movementName; <work-title> to title
         title = score.metadata.movementName or score.metadata.title or ""
 
-    # tempo: first TempoIndication found anywhere in the score
-    tempo_bpm = 120.0
-    for el in score.flatten().getElementsByClass(music21.tempo.MetronomeMark):
-        if el.number is not None:
-            tempo_bpm = float(el.number)
-            break
-
-    # divisions: ticks per quarter note. music21 offsets are in quarter-note units,
-    # so we multiply by divisions to get ticks, then divide by divisions in timeline
-    # builder to get back to quarter notes. The value cancels out, so any consistent
-    # value works. We use 10080 for high precision with integer math.
+    # divisions: ticks per quarter note (fixed value, cancels out in conversion)
     divisions = 10080
+
+    # Cache flattened score to avoid repeated traversals
+    flat = score.flatten()
+
+    # tempo map: all MetronomeMarks with their positions
+    tempo_bpm = None
+    tempo_map = []
+    for el in flat.getElementsByClass(music21.tempo.MetronomeMark):
+        if el.number is not None:
+            tick_pos = int(round(float(el.offset) * divisions))
+            # Convert to quarter-note BPM: dotted quarter=122 → 122*1.5=183 QN BPM
+            effective_bpm = float(el.number) * float(el.referent.quarterLength)
+            tempo_map.append((tick_pos, effective_bpm))
+            if tempo_bpm is None:
+                tempo_bpm = effective_bpm
+    if tempo_bpm is None:
+        tempo_bpm = 120.0
+    if not tempo_map:
+        tempo_map = [(0, tempo_bpm)]
+    else:
+        tempo_map.sort()
+        if tempo_map[0][0] > 0:
+            tempo_map.insert(0, (0, tempo_map[0][1]))
 
     # time signature
     time_signature = (4, 4)
-    for el in score.flatten().getElementsByClass(music21.meter.TimeSignature):
+    for el in flat.getElementsByClass(music21.meter.TimeSignature):
         time_signature = (el.numerator, el.denominator)
         break
 
@@ -66,19 +79,23 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
     # key signature analysis
     key_signature = "C major"
     key_mode = "major"
+    key_found = False
     # Try explicit key signature first
-    for el in score.flatten().getElementsByClass(music21.key.KeySignature):
+    for el in flat.getElementsByClass(music21.key.KeySignature):
         if hasattr(el, 'asKey'):
             k = el.asKey()
             key_signature = str(k)
             key_mode = k.mode
+            key_found = True
             break
-    for el in score.flatten().getElementsByClass(music21.key.Key):
-        key_signature = str(el)
-        key_mode = el.mode
-        break
+    if not key_found:
+        for el in flat.getElementsByClass(music21.key.Key):
+            key_signature = str(el)
+            key_mode = el.mode
+            key_found = True
+            break
     # Fallback: algorithmic analysis
-    if key_signature == "C major":
+    if not key_found:
         try:
             analyzed = score.analyze('key')
             if analyzed:
@@ -95,6 +112,7 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
         "total_measures": total_measures,
         "key_signature": key_signature,
         "key_mode": key_mode,
+        "tempo_map": tempo_map,
     }
 
     # --- notes ---

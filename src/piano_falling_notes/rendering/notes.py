@@ -5,6 +5,7 @@ from .colors import ColorScheme
 
 CORNER_RADIUS = 4
 NOTE_HORIZONTAL_GAP = 1  # px gap on each side of a note bar
+NOTE_VERTICAL_GAP = 3    # px gap between consecutive same-pitch notes
 
 
 class FallingNotesRenderer:
@@ -39,7 +40,10 @@ class FallingNotesRenderer:
                 continue
 
             # Clip to note area (0 .. keyboard_top)
+            # Only apply vertical gap at the real note top, not when clipped by frame edge
             y_top_clipped = max(0.0, y_top)
+            if y_top >= 0.0:
+                y_top_clipped += NOTE_VERTICAL_GAP
             y_bottom_clipped = min(float(keyboard_top), y_bottom)
 
             if y_bottom_clipped <= y_top_clipped:

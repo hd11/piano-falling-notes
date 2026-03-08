@@ -47,11 +47,9 @@ def build_key_map(total_width: int, margin: int = 20) -> dict[int, KeyInfo]:
             )
             white_index += 1
         else:
-            # Black key sits between the white key to its left (white_index-1)
-            # and the white key to its right (white_index).
-            # Center it at 65% across the left white key.
-            prev_white_x = margin + (white_index - 1) * white_key_width
-            x = prev_white_x + white_key_width * 0.65 - black_key_width / 2
+            # Black key centered at boundary between adjacent white keys
+            boundary_x = margin + white_index * white_key_width
+            x = boundary_x - black_key_width / 2
             key_map[midi] = KeyInfo(
                 midi=midi,
                 x=x,

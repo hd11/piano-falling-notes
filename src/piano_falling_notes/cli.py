@@ -24,5 +24,5 @@ def parse_args():
     # Web server options
     parser.add_argument('--web', action='store_true', help='Start web UI server')
     parser.add_argument('--port', type=int, default=5000, help='Port for web server (default: 5000)')
-    parser.add_argument('--host', default='0.0.0.0', help='Host for web server (default: 0.0.0.0)')
+    parser.add_argument('--host', default='127.0.0.1', help='Host for web server (default: 127.0.0.1)')
     return parser.parse_args()

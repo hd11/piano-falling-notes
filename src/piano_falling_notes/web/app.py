@@ -1,13 +1,18 @@
 import os
+import re
 import uuid
+import secrets
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['UPLOAD_FOLDER'] = '/tmp/piano-falling-notes/uploads'
 app.config['OUTPUT_FOLDER'] = '/tmp/piano-falling-notes/output'
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 # Ensure directories exist
 Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
@@ -16,6 +21,13 @@ Path(app.config['OUTPUT_FOLDER']).mkdir(parents=True, exist_ok=True)
 # Job tracking: {job_id: {status, progress, total_frames, output_path, error, created_at}}
 jobs = {}
 jobs_lock = threading.Lock()
+
+# Bounded thread pool for conversion jobs (max 3 concurrent)
+MAX_CONCURRENT_JOBS = int(os.environ.get('MAX_CONCURRENT_JOBS', '3'))
+executor_pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_JOBS)
+
+# UUID validation pattern
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 
 def cleanup_old_jobs():
@@ -32,13 +44,7 @@ def cleanup_old_jobs():
 
 
 def run_conversion(job_id, input_path, config):
-    """Background conversion thread."""
-    import sys
-    # Ensure the package is importable
-    project_root = str(Path(__file__).resolve().parents[4])
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-
+    """Background conversion task."""
     from ..parser.musicxml_parser import parse_musicxml
     from ..timeline.builder import build_timeline
     from ..timeline.time_index import TimeIndex
@@ -66,13 +72,24 @@ def run_conversion(job_id, input_path, config):
         notes, metadata = parse_musicxml(input_path)
 
         # 2. Build timeline
-        from ..timeline.builder import build_timeline
         timeline = build_timeline(notes, metadata)
         time_index = TimeIndex(timeline.notes)
 
         update('rendering', progress=0)
 
-        # 3. Setup rendering
+        # 3. Apply theme
+        from ..rendering.themes import THEMES, auto_select_theme
+        if config.theme == "auto":
+            theme = auto_select_theme(metadata)
+        elif config.theme in THEMES:
+            theme = THEMES[config.theme]
+        else:
+            theme = THEMES["classic"]
+
+        bg = config.custom_background if config.custom_background else theme.background_color
+        config.background_color = bg
+
+        # 4. Setup rendering
         layout = Layout(
             width=config.width,
             height=config.height,
@@ -80,7 +97,7 @@ def run_conversion(job_id, input_path, config):
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette)
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys)
         effects = VisualEffects()
@@ -163,9 +180,13 @@ def run_conversion(job_id, input_path, config):
         Path(input_path).unlink(missing_ok=True)
 
     except Exception as e:
+        # Sanitize error: don't expose internal paths or stack traces
+        error_msg = str(e)
+        if '/' in error_msg or '\\' in error_msg:
+            error_msg = "Conversion failed. Please check your input file."
         with jobs_lock:
             jobs[job_id]['status'] = 'error'
-            jobs[job_id]['error'] = str(e)
+            jobs[job_id]['error'] = error_msg
         Path(input_path).unlink(missing_ok=True)
 
 
@@ -244,39 +265,52 @@ def convert():
             'created_at': time.time(),
         }
 
-    t = threading.Thread(target=run_conversion, args=(job_id, input_path, config), daemon=True)
-    t.start()
+    executor_pool.submit(run_conversion, job_id, input_path, config)
 
     return jsonify({'job_id': job_id})
 
 
+def _validate_job_id(job_id: str) -> bool:
+    return bool(_UUID_RE.match(job_id))
+
+
 @app.route('/status/<job_id>')
 def status(job_id):
+    if not _validate_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
     with jobs_lock:
         job = jobs.get(job_id)
-    if job is None:
-        return jsonify({'error': 'Job not found'}), 404
+        if job is None:
+            return jsonify({'error': 'Job not found'}), 404
+        # Snapshot values under lock to avoid race conditions
+        job_status = job['status']
+        job_progress = job['progress']
+        job_total = job.get('total_frames', 0)
+        job_error = job.get('error')
 
-    total = job.get('total_frames', 0)
     progress_pct = 0
-    if total > 0:
-        progress_pct = min(100, int(job['progress'] / total * 100))
-    elif job['status'] == 'done':
+    if job_total > 0:
+        progress_pct = min(100, int(job_progress / job_total * 100))
+    elif job_status == 'done':
         progress_pct = 100
 
     resp = {
-        'status': job['status'],
+        'status': job_status,
         'progress': progress_pct,
     }
-    if job['status'] == 'done':
+    if job_status == 'done':
         resp['output_url'] = f'/download/{job_id}'
-    if job['status'] == 'error':
-        resp['error'] = job.get('error', 'Unknown error')
+    if job_status == 'error':
+        resp['error'] = job_error or 'Unknown error'
     return jsonify(resp)
 
 
 @app.route('/download/<job_id>')
 def download(job_id):
+    if not _validate_job_id(job_id):
+        return jsonify({'error': 'Invalid job ID'}), 400
+
     with jobs_lock:
         job = jobs.get(job_id)
     if job is None:
@@ -293,3 +327,11 @@ def download(job_id):
     download_name = parts[0] + '.mp4' if len(parts) == 2 else filename
 
     return send_file(output_path, as_attachment=True, download_name=download_name)
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response

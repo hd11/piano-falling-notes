@@ -208,7 +208,16 @@ MusicXML → MIDI (music21) → WAV (fluidsynth + soundfont) → AAC mux (FFmpeg
 - [x] 음원 자동 분석 (조성 + 템포) → 테마 자동 선택
 - [x] 웹 UI 테마 드롭다운 + 배경색 커스텀 컬러 피커
 - [x] CLI --theme, --background 옵션 추가
-- [x] Golden_ref.mxl 테스트: G major, 122 BPM → Sunset 테마 자동 선택
+- [x] Golden_ref.mxl 테스트: G major, 183 BPM → Neon 테마 자동 선택
+
+### Phase 6: 동기화 수정 및 품질 개선 - 완료
+- [x] [CRITICAL] 템포 beat-unit 변환 버그 수정 (♩.=122 → 183 QN BPM)
+- [x] 템포 맵 기반 시간 변환 (다중 MetronomeMark 지원)
+- [x] 웹 UI 테마 미적용 버그 수정 (run_conversion 내 팔레트 적용)
+- [x] 조성 감지 센티널 버그 수정 (key_found 불리언)
+- [x] 검은건반 위치 수정 (경계 중앙 센터링)
+- [x] 연타음 3px 수직 갭 추가
+- [x] MuseScore vs fluidsynth 음원 차이 분석
 
 ### 사용법
 ```bash

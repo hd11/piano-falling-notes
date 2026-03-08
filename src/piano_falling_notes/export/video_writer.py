@@ -22,7 +22,7 @@ class VideoWriter:
                 output_path,
             ],
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
 
     def write_frame(self, frame: Image.Image):
@@ -32,14 +32,21 @@ class VideoWriter:
 
     def close(self):
         """Finalize encoding."""
-        self.process.stdin.close()
+        try:
+            self.process.stdin.close()
+        except BrokenPipeError:
+            pass
         self.process.wait()
         if self.process.returncode != 0:
-            error = self.process.stderr.read().decode()
-            raise RuntimeError(f"FFmpeg error: {error}")
+            raise RuntimeError(f"FFmpeg exited with code {self.process.returncode}")
 
     def __enter__(self):
         return self
 
-    def __exit__(self, *args):
-        self.close()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            self.process.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
+        self.process.wait()
+        return False
