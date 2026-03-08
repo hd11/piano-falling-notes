@@ -53,7 +53,8 @@ class VideoGenerator:
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
-                                       guide_lines=config.guide_lines)
+                                       guide_lines=config.guide_lines,
+                                       glitter=config.glitter)
         effects = VisualEffects()
 
         # 4. Calculate total frames
@@ -84,7 +85,7 @@ class VideoGenerator:
 
         print(f"Rendering {total_frames} frames ({total_time:.1f}s @ {layout.fps}fps)...")
 
-        prev_active = set()
+        prev_active = {}  # {midi: start_seconds} of last frame's active notes
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in tqdm(range(total_frames), desc="Rendering"):
                 current_time = frame_idx / layout.fps - lead_in
@@ -101,35 +102,38 @@ class VideoGenerator:
                 frame = falling.render(frame, visible, current_time)
 
                 # Find currently playing notes (for keyboard highlighting)
+                # Apply note_duration_ratio so repeated notes show a release gap
                 active = {}
+                active_starts = {}  # {midi: start_seconds} to identify specific note instance
                 for n in visible:
-                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds:
+                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds * config.note_duration_ratio:
                         active[n.midi_number] = n.velocity
+                        active_starts[n.midi_number] = n.start_seconds
 
-                # Newly struck keys this frame
-                newly_active = {m: v for m, v in active.items() if m not in prev_active}
+                # Newly struck = new midi OR same midi but different note (re-strike)
+                newly_active = {}
+                for m, v in active.items():
+                    if m not in prev_active or active_starts[m] != prev_active[m]:
+                        newly_active[m] = v
 
-                # DJ EQ Max visualization
-                if config.note_style == "djeq" and active:
-                    frame = effects.apply_dj_eq(frame, active, keyboard.keys, layout.keyboard_top, color_scheme)
+                # Ascending bubble particles around active notes
+                frame = effects.apply_ascending_bubbles(
+                    frame, visible, active, keyboard.keys,
+                    layout.keyboard_top, color_scheme, current_time,
+                )
 
-                # Neon burst on key strike
-                if config.neon_burst and newly_active:
-                    frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
-
-                # Glow effects at keyboard line
-                if config.glow_enabled and active:
-                    frame = effects.apply_note_glow(
-                        frame, active, keyboard.keys,
-                        layout.keyboard_top, color_scheme,
-                    )
+                # Keyboard-top glow for active notes
+                frame = effects.apply_note_glow(
+                    frame, active, keyboard.keys,
+                    layout.keyboard_top, color_scheme, current_time,
+                )
 
                 # Render keyboard (paste at bottom)
                 kb_img = keyboard.render(active)
                 frame.paste(kb_img, (0, layout.keyboard_top))
 
                 writer.write_frame(frame)
-                prev_active = set(active.keys())
+                prev_active = active_starts
 
         # 7. Mux audio if available
         if audio_path:

@@ -86,7 +86,6 @@ class KeyboardRenderer:
             if key is None or not key.is_black:
                 continue
             color_rgb = self.colors.note_color_rgb(midi, velocity)
-            # Brighten slightly for black keys so they read clearly
             bright = tuple(min(255, int(c * 1.25)) for c in color_rgb)
             x0 = int(key.x)
             x1 = int(key.x + key.width)

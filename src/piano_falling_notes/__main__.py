@@ -45,6 +45,8 @@ def main():
         config.neon_burst = False
     if args.no_guide_lines:
         config.guide_lines = False
+    if args.glitter:
+        config.glitter = True
     if args.theme:
         config.theme = args.theme
     if args.background:

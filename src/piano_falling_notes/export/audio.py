@@ -30,10 +30,21 @@ def find_soundfont(project_root: str = ".") -> str | None:
 
 
 def musicxml_to_midi(musicxml_path: str, midi_path: str) -> str:
-    """Convert MusicXML to MIDI using music21."""
+    """Convert MusicXML to MIDI using music21, forcing piano sound."""
     import music21
     score = music21.converter.parse(musicxml_path)
     mf = music21.midi.translate.streamToMidiFile(score)
+    # Force program 0 (Acoustic Grand Piano) on tracks that have notes
+    for track in mf.tracks:
+        # Skip metadata-only tracks (no NOTE_ON events)
+        has_notes = any(e.type == music21.midi.ChannelVoiceMessages.NOTE_ON
+                        for e in track.events)
+        if not has_notes:
+            continue
+        # Set existing PROGRAM_CHANGE to piano
+        for event in track.events:
+            if event.type == music21.midi.ChannelVoiceMessages.PROGRAM_CHANGE:
+                event.data = 0  # Acoustic Grand Piano
     mf.open(midi_path, 'wb')
     mf.write()
     mf.close()

@@ -101,7 +101,8 @@ def run_conversion(job_id, input_path, config):
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
-                                       guide_lines=config.guide_lines)
+                                       guide_lines=config.guide_lines,
+                                       glitter=config.glitter)
         effects = VisualEffects()
 
         # 4. Calculate total frames
@@ -117,7 +118,7 @@ def run_conversion(job_id, input_path, config):
                 update('audio', progress=0)
                 stem = Path(input_path).stem
                 audio_path = str(Path(app.config['OUTPUT_FOLDER']) / f'{stem}_{job_id}.wav')
-                project_root_path = str(Path(__file__).resolve().parents[4])
+                project_root_path = str(Path(__file__).resolve().parents[3])
                 generate_audio(input_path, audio_path, project_root_path)
             except Exception as e:
                 audio_path = None
@@ -133,7 +134,7 @@ def run_conversion(job_id, input_path, config):
         else:
             video_only_path = output_path
 
-        prev_active = set()
+        prev_active = {}  # {midi: start_seconds} of last frame's active notes
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in range(total_frames):
                 current_time = frame_idx / layout.fps - lead_in
@@ -146,13 +147,20 @@ def run_conversion(job_id, input_path, config):
 
                 frame = falling.render(frame, visible, current_time)
 
+                # Find currently playing notes (for keyboard highlighting)
+                # Apply note_duration_ratio so repeated notes show a release gap
                 active = {}
+                active_starts = {}  # {midi: start_seconds} to identify specific note instance
                 for n in visible:
-                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds:
+                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds * config.note_duration_ratio:
                         active[n.midi_number] = n.velocity
+                        active_starts[n.midi_number] = n.start_seconds
 
-                # Newly struck keys this frame
-                newly_active = {m: v for m, v in active.items() if m not in prev_active}
+                # Newly struck = new midi OR same midi but different note (re-strike)
+                newly_active = {}
+                for m, v in active.items():
+                    if m not in prev_active or active_starts[m] != prev_active[m]:
+                        newly_active[m] = v
 
                 # DJ EQ Max visualization
                 if config.note_style == "djeq" and active:
@@ -165,14 +173,20 @@ def run_conversion(job_id, input_path, config):
                 if config.glow_enabled and active:
                     frame = effects.apply_note_glow(
                         frame, active, keyboard.keys,
-                        layout.keyboard_top, color_scheme,
+                        layout.keyboard_top, color_scheme, current_time,
                     )
+
+                # Wave ripple along keyboard line
+                frame = effects.apply_wave_ripple(
+                    frame, active, keyboard.keys,
+                    layout.keyboard_top, color_scheme,
+                )
 
                 kb_img = keyboard.render(active)
                 frame.paste(kb_img, (0, layout.keyboard_top))
 
                 writer.write_frame(frame)
-                prev_active = set(active.keys())
+                prev_active = active_starts
 
                 # Update progress every 30 frames
                 if frame_idx % 30 == 0:
@@ -239,6 +253,11 @@ def convert():
     if color_mode in ('single', 'rainbow', 'neon', 'part'):
         config.color_mode = color_mode
 
+    single_color = request.form.get('single_note_color', '').strip()
+    if single_color and single_color.startswith('#') and len(single_color) == 7:
+        h = single_color.lstrip('#')
+        config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
     theme = request.form.get('theme', 'auto')
     from ..rendering.themes import THEME_NAMES
     if theme in THEME_NAMES or theme == 'auto':
@@ -270,6 +289,9 @@ def convert():
     guide_lines = request.form.get('guide_lines', 'on')
     config.guide_lines = (guide_lines == 'on')
 
+    glitter = request.form.get('glitter', 'off')
+    config.glitter = (glitter == 'on')
+
     glow = request.form.get('glow', 'on')
     config.glow_enabled = (glow == 'on')
 
@@ -286,6 +308,7 @@ def convert():
             'total_frames': 0,
             'output_path': None,
             'input_path': input_path,
+            'original_filename': f.filename,
             'error': None,
             'created_at': time.time(),
         }
@@ -293,6 +316,147 @@ def convert():
     executor_pool.submit(run_conversion, job_id, input_path, config)
 
     return jsonify({'job_id': job_id})
+
+
+@app.route('/preview', methods=['POST'])
+def preview():
+    """Generate a single preview frame image."""
+    cleanup_old_jobs()
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ('.musicxml', '.mxl', '.xml'):
+        return jsonify({'error': 'Invalid file type'}), 400
+
+    preview_id = str(uuid.uuid4())
+    safe_name = f'{preview_id}{ext}'
+    input_path = str(Path(app.config['UPLOAD_FOLDER']) / safe_name)
+    f.save(input_path)
+
+    try:
+        from ..parser.musicxml_parser import parse_musicxml
+        from ..timeline.builder import build_timeline
+        from ..timeline.time_index import TimeIndex
+        from ..rendering.layout import Layout
+        from ..rendering.keyboard import KeyboardRenderer
+        from ..rendering.notes import FallingNotesRenderer
+        from ..rendering.effects import VisualEffects
+        from ..rendering.colors import ColorScheme
+        from ..rendering.themes import THEMES, auto_select_theme
+        from ..core.config import Config
+        from PIL import Image
+        import io
+
+        config = Config()
+        config.input_path = input_path
+        config.width = 960
+        config.height = 540
+
+        # Parse form options (same as /convert)
+        color_mode = request.form.get('color_mode', 'single')
+        if color_mode in ('single', 'rainbow', 'neon', 'part'):
+            config.color_mode = color_mode
+
+        single_color = request.form.get('single_note_color', '').strip()
+        if single_color and single_color.startswith('#') and len(single_color) == 7:
+            h = single_color.lstrip('#')
+            config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+        theme = request.form.get('theme', 'auto')
+        from ..rendering.themes import THEME_NAMES
+        if theme in THEME_NAMES or theme == 'auto':
+            config.theme = theme
+
+        custom_bg = request.form.get('custom_bg', '').strip()
+        if custom_bg and custom_bg.startswith('#') and len(custom_bg) == 7:
+            h = custom_bg.lstrip('#')
+            config.custom_background = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+        glitter = request.form.get('glitter', 'off')
+        config.glitter = (glitter == 'on')
+
+        guide_lines = request.form.get('guide_lines', 'on')
+        config.guide_lines = (guide_lines == 'on')
+
+        # Parse and build
+        notes, metadata = parse_musicxml(input_path)
+        timeline = build_timeline(notes, metadata)
+        time_index = TimeIndex(timeline.notes)
+
+        if config.theme == "auto":
+            theme_obj = auto_select_theme(metadata)
+        elif config.theme in THEMES:
+            theme_obj = THEMES[config.theme]
+        else:
+            theme_obj = THEMES["classic"]
+
+        bg = config.custom_background if config.custom_background else theme_obj.background_color
+        config.background_color = bg
+
+        layout = Layout(width=config.width, height=config.height, fps=30,
+                        keyboard_height_ratio=config.keyboard_height_ratio,
+                        lookahead_seconds=config.lookahead_seconds)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme_obj.palette,
+                                   single_color=config.single_note_color)
+        keyboard = KeyboardRenderer(layout, color_scheme)
+        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
+                                       note_duration_ratio=config.note_duration_ratio,
+                                       guide_lines=config.guide_lines,
+                                       glitter=config.glitter)
+        effects = VisualEffects()
+
+        # Pick a time ~10% into the piece where notes are active
+        target_time = timeline.total_duration * 0.1
+        # Find a time with active notes
+        for t_try in [target_time, target_time + 2, target_time + 5, 5.0, 10.0]:
+            view_start = t_try
+            view_end = t_try + layout.lookahead_seconds
+            visible = time_index.query(view_start, view_end)
+            active = {}
+            for n in visible:
+                if n.start_seconds <= t_try < n.start_seconds + n.duration_seconds * config.note_duration_ratio:
+                    active[n.midi_number] = n.velocity
+            if active:
+                break
+
+        current_time = t_try
+        frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
+        frame = falling.render(frame, visible, current_time)
+
+        # Ascending bubbles (render a few frames to seed particles)
+        for warmup in range(10):
+            frame_temp = Image.new('RGB', (layout.width, layout.height), config.background_color)
+            frame_temp = falling.render(frame_temp, visible, current_time)
+            effects.apply_ascending_bubbles(frame_temp, visible, active, keyboard.keys,
+                                            layout.keyboard_top, color_scheme, current_time)
+        frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys,
+                                                layout.keyboard_top, color_scheme, current_time)
+
+        # Glow
+        frame = effects.apply_note_glow(frame, active, keyboard.keys,
+                                        layout.keyboard_top, color_scheme, current_time)
+
+        # Keyboard
+        kb_img = keyboard.render(active)
+        frame.paste(kb_img, (0, layout.keyboard_top))
+
+        # Save to bytes
+        buf = io.BytesIO()
+        frame.save(buf, format='PNG', optimize=True)
+        buf.seek(0)
+
+        return send_file(buf, mimetype='image/png', download_name='preview.png')
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        Path(input_path).unlink(missing_ok=True)
 
 
 def _validate_job_id(job_id: str) -> bool:
@@ -346,10 +510,12 @@ def download(job_id):
     if not output_path or not Path(output_path).exists():
         return jsonify({'error': 'Output file missing'}), 404
 
-    filename = Path(output_path).name
-    # Strip the job_id suffix for a cleaner download name
-    parts = filename.rsplit(f'_{job_id}', 1)
-    download_name = parts[0] + '.mp4' if len(parts) == 2 else filename
+    # Get clean download name from original filename
+    original = job.get('original_filename', '')
+    if original:
+        download_name = Path(original).stem + '.mp4'
+    else:
+        download_name = Path(output_path).name
 
     return send_file(output_path, as_attachment=True, download_name=download_name)
 

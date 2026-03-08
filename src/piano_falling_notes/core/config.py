@@ -23,7 +23,7 @@ class Config:
     # Colors
     background_color: tuple = (15, 15, 20)
     color_mode: str = "single"  # options: single, rainbow, neon, part
-    single_note_color: tuple = (0, 210, 210)  # cyan/teal default for single mode
+    single_note_color: tuple = (0, 255, 200)  # neon cyan default
     note_opacity: float = 0.95
     theme: str = "auto"
     custom_background: tuple | None = None
@@ -42,6 +42,7 @@ class Config:
     guide_lines: bool = True  # background guide lines
     note_style: str = "standard"  # "standard" or "djeq" (DJ EQ Max visualization)
     note_duration_ratio: float = 0.92  # visual shortening ratio for note separation
+    glitter: bool = False  # twinkling glitter on note bars
 
     # Timing
     lead_in_seconds: float = 2.0

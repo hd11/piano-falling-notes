@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko" translate="no">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -415,7 +415,7 @@
     </div>
     <div>
       <h1>Piano Falling Notes</h1>
-      <div class="subtitle">MusicXML → 영상 변환기 / Video Generator</div>
+      <div class="subtitle">MusicXML → 영상 변환기</div>
     </div>
   </div>
 </header>
@@ -424,7 +424,7 @@
 
   <!-- Upload Card -->
   <div class="card" id="upload-section">
-    <div class="card-title">1 — 파일 업로드 / Upload File</div>
+    <div class="card-title">1 — 파일 업로드</div>
     <div id="drop-zone">
       <input type="file" id="file-input" accept=".musicxml,.mxl,.xml" />
       <div class="upload-icon">🎵</div>
@@ -438,42 +438,60 @@
 
   <!-- Options Card -->
   <div class="card" id="options-section">
-    <div class="card-title">2 — 설정 / Options</div>
+    <div class="card-title">2 — 설정</div>
     <div class="options-grid">
 
       <div class="option-group">
-        <label for="theme">테마 / Theme</label>
+        <label for="theme">테마</label>
         <select id="theme" name="theme">
-          <option value="auto">Auto (음원 분석)</option>
-          <option value="classic">Classic (기본)</option>
-          <option value="midnight">Midnight (단조)</option>
-          <option value="sunset">Sunset (장조)</option>
-          <option value="ocean">Ocean (느린 곡)</option>
-          <option value="neon">Neon (빠른 곡)</option>
-          <option value="pastel">Pastel (파스텔)</option>
+          <option value="auto">자동 (음원 분석)</option>
+          <option value="classic">클래식 (기본)</option>
+          <option value="midnight">미드나잇 (단조)</option>
+          <option value="sunset">선셋 (장조)</option>
+          <option value="ocean">오션 (느린 곡)</option>
+          <option value="neon">네온 (빠른 곡)</option>
+          <option value="pastel">파스텔</option>
         </select>
       </div>
 
       <div class="option-group">
-        <label for="color_mode">노트 색상 / Note Color</label>
-        <select id="color_mode" name="color_mode">
-          <option value="single" selected>단색 / Single Color</option>
-          <option value="rainbow">여러색 / Rainbow</option>
-          <option value="neon">네온 / Neon</option>
-          <option value="part">파트별 / By Part</option>
-        </select>
+        <label for="color_mode">노트 색상</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="color_mode" name="color_mode" style="flex:1;">
+            <option value="single" selected>단색</option>
+            <option value="rainbow">여러색</option>
+            <option value="neon">네온</option>
+            <option value="part">파트별</option>
+          </select>
+          <input type="color" id="single_note_color" value="#00D2D2" title="노트 색상 선택" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
+        </div>
       </div>
 
-      <div class="option-group">
-        <label for="note_style">시각화 스타일 / Visual Style</label>
+      <div class="option-group" style="display:none;">
+        <label for="note_style">시각화 스타일</label>
         <select id="note_style" name="note_style">
-          <option value="standard" selected>기본 / Standard</option>
-          <option value="djeq">DJ EQ Max</option>
+          <option value="standard" selected>기본</option>
         </select>
       </div>
 
       <div class="option-group">
-        <label for="custom_bg">배경색 / Background</label>
+        <label for="resolution">해상도</label>
+        <select id="resolution" name="resolution">
+          <option value="1080p">1080p (1920x1080)</option>
+          <option value="720p">720p (1280x720)</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="fps">FPS</label>
+        <select id="fps" name="fps">
+          <option value="60">60 fps</option>
+          <option value="30">30 fps</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="custom_bg">배경색</label>
         <div style="display:flex; gap:8px; align-items:center;">
           <input type="color" id="custom_bg" name="custom_bg" value="#0F0F14" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
           <label class="toggle" style="margin:0;">
@@ -484,29 +502,13 @@
         </div>
       </div>
 
-      <div class="option-group">
-        <label for="resolution">해상도 / Resolution</label>
-        <select id="resolution" name="resolution">
-          <option value="1080p">1080p (1920×1080)</option>
-          <option value="720p">720p (1280×720)</option>
-        </select>
-      </div>
-
-      <div class="option-group">
-        <label for="fps">프레임 레이트 / FPS</label>
-        <select id="fps" name="fps">
-          <option value="60">60 fps</option>
-          <option value="30">30 fps</option>
-        </select>
-      </div>
-
     </div>
 
     <div style="margin-top:20px; display:flex; flex-direction:column; gap:14px;">
 
       <div class="toggle-row">
         <div class="toggle-label-group">
-          <span class="label-main">글로우 효과 / Glow Effect</span>
+          <span class="label-main">글로우 효과</span>
           <span class="label-sub">건반 발광 효과 활성화</span>
         </div>
         <label class="toggle">
@@ -517,7 +519,7 @@
 
       <div class="toggle-row">
         <div class="toggle-label-group">
-          <span class="label-main">오디오 / Audio</span>
+          <span class="label-main">오디오</span>
           <span class="label-sub">MIDI 기반 사운드 생성</span>
         </div>
         <label class="toggle">
@@ -528,7 +530,7 @@
 
       <div class="toggle-row">
         <div class="toggle-label-group">
-          <span class="label-main">네온 버스트 / Neon Burst</span>
+          <span class="label-main">네온 버스트</span>
           <span class="label-sub">건반 타격 시 네온 효과</span>
         </div>
         <label class="toggle">
@@ -539,7 +541,7 @@
 
       <div class="toggle-row">
         <div class="toggle-label-group">
-          <span class="label-main">가이드라인 / Guide Lines</span>
+          <span class="label-main">가이드라인</span>
           <span class="label-sub">배경 가이드 라인 표시</span>
         </div>
         <label class="toggle">
@@ -548,15 +550,36 @@
         </label>
       </div>
 
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">글리터</span>
+          <span class="label-sub">노트에 반짝이 효과 추가</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="glitter" name="glitter" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
     </div>
   </div>
 
-  <!-- Convert Button -->
-  <button id="convert-btn" disabled>변환 시작 / Start Conversion</button>
+  <!-- Preview + Convert Buttons -->
+  <div style="display:flex; gap:12px;">
+    <button id="preview-btn" disabled style="flex:1; padding:14px; background:var(--surface2); border:1px solid var(--accent); border-radius:var(--radius-sm); color:var(--accent); font-size:1rem; font-weight:700; cursor:pointer; transition:opacity 0.2s, transform 0.1s;">미리보기</button>
+    <button id="convert-btn" disabled style="flex:1;">변환 시작</button>
+  </div>
+
+  <!-- Preview Card -->
+  <div class="card" id="preview-card" style="display:none;">
+    <div class="card-title">미리보기</div>
+    <img id="preview-img" src="" alt="Preview" style="width:100%; border-radius:var(--radius-sm); border:1px solid var(--border);" />
+    <div style="text-align:center; margin-top:10px; font-size:0.8rem; color:var(--muted);">설정을 변경하고 다시 미리보기를 클릭하세요</div>
+  </div>
 
   <!-- Progress Card -->
   <div class="card" id="progress-card">
-    <div class="card-title">3 — 변환 중 / Converting</div>
+    <div class="card-title">3 — 변환 중</div>
     <div class="status-row">
       <span id="status-label">처리 중...</span>
       <span id="pct-label">0%</span>
@@ -570,11 +593,11 @@
 
   <!-- Download Card -->
   <div class="card" id="download-card">
-    <div class="card-title">4 — 완료 / Done</div>
+    <div class="card-title">4 — 완료</div>
     <div class="success-icon">🎬</div>
     <div class="success-msg">영상 변환이 완료되었습니다!</div>
-    <a id="download-btn" href="#">⬇ MP4 다운로드 / Download MP4</a>
-    <span class="restart-link" id="restart-link">다른 파일 변환하기 / Convert another file</span>
+    <a id="download-btn" href="#" download>⬇ MP4 다운로드</a>
+    <span class="restart-link" id="restart-link">다른 파일 변환하기</span>
   </div>
 
 </main>
@@ -596,6 +619,9 @@
   const fileChosen  = document.getElementById('file-chosen');
   const chosenName  = document.getElementById('chosen-name');
   const convertBtn  = document.getElementById('convert-btn');
+  const previewBtn  = document.getElementById('preview-btn');
+  const previewCard = document.getElementById('preview-card');
+  const previewImg  = document.getElementById('preview-img');
   const progressCard = document.getElementById('progress-card');
   const downloadCard = document.getElementById('download-card');
   const progressBar = document.getElementById('progress-bar');
@@ -605,6 +631,13 @@
   const errorBox    = document.getElementById('error-box');
   const downloadBtn = document.getElementById('download-btn');
   const restartLink = document.getElementById('restart-link');
+
+  // ── Single color picker visibility ───────────────
+  const colorMode = document.getElementById('color_mode');
+  const singleColorPicker = document.getElementById('single_note_color');
+  colorMode.addEventListener('change', () => {
+    singleColorPicker.style.display = colorMode.value === 'single' ? '' : 'none';
+  });
 
   // ── File selection ────────────────────────────────
   fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
@@ -634,17 +667,18 @@
     chosenName.textContent = file.name;
     fileChosen.style.display = 'flex';
     convertBtn.disabled = false;
+    previewBtn.disabled = false;
   }
 
   // ── Status label helpers ──────────────────────────
   const STATUS_LABELS = {
-    queued:    '대기 중… / Queued',
-    parsing:   '악보 분석 중… / Parsing MusicXML',
-    audio:     '오디오 생성 중… / Generating Audio',
-    rendering: '영상 렌더링 중… / Rendering Frames',
-    encoding:  '인코딩 중… / Encoding Video',
-    done:      '완료! / Done!',
-    error:     '오류 발생 / Error',
+    queued:    '대기 중…',
+    parsing:   '악보 분석 중…',
+    audio:     '오디오 생성 중…',
+    rendering: '영상 렌더링 중…',
+    encoding:  '인코딩 중…',
+    done:      '완료!',
+    error:     '오류 발생',
   };
 
   // ── Convert ───────────────────────────────────────
@@ -660,7 +694,7 @@
     progressCard.style.display = 'block';
     convertBtn.disabled = true;
     progressBar.className = 'progress-bar indeterminate';
-    statusLabel.textContent = 'Uploading…';
+    statusLabel.textContent = '업로드 중…';
     pctLabel.textContent = '';
     statusDetail.textContent = '';
 
@@ -669,9 +703,13 @@
     fd.append('file', selectedFile);
     fd.append('theme',       document.getElementById('theme').value);
     fd.append('color_mode',  document.getElementById('color_mode').value);
+    if (document.getElementById('color_mode').value === 'single') {
+      fd.append('single_note_color', document.getElementById('single_note_color').value);
+    }
     fd.append('note_style',  document.getElementById('note_style').value);
     fd.append('neon_burst',  document.getElementById('neon_burst').checked  ? 'on' : 'off');
     fd.append('guide_lines', document.getElementById('guide_lines').checked ? 'on' : 'off');
+    fd.append('glitter',     document.getElementById('glitter').checked ? 'on' : 'off');
     if (document.getElementById('custom_bg_enabled').checked) {
       fd.append('custom_bg', document.getElementById('custom_bg').value);
     }
@@ -688,6 +726,44 @@
       pollStatus();
     } catch (err) {
       showError(err.message);
+    }
+  }
+
+  previewBtn.addEventListener('click', generatePreview);
+
+  async function generatePreview() {
+    if (!selectedFile) return;
+    previewBtn.disabled = true;
+    previewBtn.textContent = '생성 중...';
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('theme',       document.getElementById('theme').value);
+    fd.append('color_mode',  document.getElementById('color_mode').value);
+    if (document.getElementById('color_mode').value === 'single') {
+      fd.append('single_note_color', document.getElementById('single_note_color').value);
+    }
+    if (document.getElementById('custom_bg_enabled').checked) {
+      fd.append('custom_bg', document.getElementById('custom_bg').value);
+    }
+    fd.append('guide_lines', document.getElementById('guide_lines').checked ? 'on' : 'off');
+    fd.append('glitter',     document.getElementById('glitter').checked ? 'on' : 'off');
+
+    try {
+      const res = await fetch('/preview', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Preview failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      previewImg.src = url;
+      previewCard.style.display = 'block';
+    } catch (err) {
+      alert('미리보기 생성 실패: ' + err.message);
+    } finally {
+      previewBtn.disabled = false;
+      previewBtn.textContent = '미리보기';
     }
   }
 
@@ -712,7 +788,7 @@
         pctLabel.textContent = `${pct}%`;
         progressBar.className = 'progress-bar';
         progressBar.style.width = `${pct}%`;
-        statusDetail.textContent = `프레임 렌더링 / Frame rendering`;
+        statusDetail.textContent = `프레임 렌더링 중`;
       } else if (data.status === 'done') {
         clearInterval(pollInterval);
         progressBar.className = 'progress-bar';
@@ -738,7 +814,10 @@
     progressCard.style.display = 'none';
     downloadCard.style.display = 'block';
     downloadBtn.href = url;
+    downloadBtn.download = selectedFile ? selectedFile.name.replace(/\.(musicxml|mxl|xml)$/i, '.mp4') : 'output.mp4';
     convertBtn.disabled = false;
+    // Auto-trigger download
+    downloadBtn.click();
   }
 
   function showError(msg) {
@@ -758,6 +837,8 @@
     fileChosen.style.display = 'none';
     chosenName.textContent = '';
     convertBtn.disabled = true;
+    previewCard.style.display = 'none';
+    previewBtn.disabled = true;
     progressCard.style.display = 'none';
     downloadCard.style.display = 'none';
     errorBox.style.display = 'none';

@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--no-guide-lines', action='store_true', help='Disable guide lines')
     parser.add_argument('--theme', default=None, choices=['auto', 'classic', 'midnight', 'sunset', 'ocean', 'neon', 'pastel'])
     parser.add_argument('--background', default=None, help='Custom background color hex (e.g. #0F0F14)')
+    parser.add_argument('--glitter', action='store_true', help='Enable twinkling glitter on note bars')
     parser.add_argument('--no-glow', action='store_true', help='Disable glow effects')
     parser.add_argument('--no-audio', action='store_true', help='Disable audio generation')
     parser.add_argument('--glow-intensity', type=float, default=None)
