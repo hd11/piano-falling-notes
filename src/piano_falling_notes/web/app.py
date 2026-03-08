@@ -97,9 +97,11 @@ def run_conversion(job_id, input_path, config):
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette, single_color=config.single_note_color)
         keyboard = KeyboardRenderer(layout, color_scheme)
-        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys)
+        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
+                                       note_duration_ratio=config.note_duration_ratio,
+                                       guide_lines=config.guide_lines)
         effects = VisualEffects()
 
         # 4. Calculate total frames
@@ -131,6 +133,7 @@ def run_conversion(job_id, input_path, config):
         else:
             video_only_path = output_path
 
+        prev_active = set()
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in range(total_frames):
                 current_time = frame_idx / layout.fps - lead_in
@@ -148,6 +151,17 @@ def run_conversion(job_id, input_path, config):
                     if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds:
                         active[n.midi_number] = n.velocity
 
+                # Newly struck keys this frame
+                newly_active = {m: v for m, v in active.items() if m not in prev_active}
+
+                # DJ EQ Max visualization
+                if config.note_style == "djeq" and active:
+                    frame = effects.apply_dj_eq(frame, active, keyboard.keys, layout.keyboard_top, color_scheme)
+
+                # Neon burst on key strike
+                if config.neon_burst and newly_active:
+                    frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
+
                 if config.glow_enabled and active:
                     frame = effects.apply_note_glow(
                         frame, active, keyboard.keys,
@@ -158,6 +172,7 @@ def run_conversion(job_id, input_path, config):
                 frame.paste(kb_img, (0, layout.keyboard_top))
 
                 writer.write_frame(frame)
+                prev_active = set(active.keys())
 
                 # Update progress every 30 frames
                 if frame_idx % 30 == 0:
@@ -220,8 +235,8 @@ def convert():
     config = Config()
     config.input_path = input_path
 
-    color_mode = request.form.get('color_mode', 'rainbow_octave')
-    if color_mode in ('rainbow_octave', 'pitch_range', 'part_based'):
+    color_mode = request.form.get('color_mode', 'single')
+    if color_mode in ('single', 'rainbow', 'neon', 'part'):
         config.color_mode = color_mode
 
     theme = request.form.get('theme', 'auto')
@@ -244,6 +259,16 @@ def convert():
 
     fps_val = request.form.get('fps', '60')
     config.fps = 30 if fps_val == '30' else 60
+
+    note_style = request.form.get('note_style', 'standard')
+    if note_style in ('standard', 'djeq'):
+        config.note_style = note_style
+
+    neon_burst = request.form.get('neon_burst', 'on')
+    config.neon_burst = (neon_burst == 'on')
+
+    guide_lines = request.form.get('guide_lines', 'on')
+    config.guide_lines = (guide_lines == 'on')
 
     glow = request.form.get('glow', 'on')
     config.glow_enabled = (glow == 'on')

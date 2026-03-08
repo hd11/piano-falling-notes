@@ -455,6 +455,24 @@
       </div>
 
       <div class="option-group">
+        <label for="color_mode">노트 색상 / Note Color</label>
+        <select id="color_mode" name="color_mode">
+          <option value="single" selected>단색 / Single Color</option>
+          <option value="rainbow">여러색 / Rainbow</option>
+          <option value="neon">네온 / Neon</option>
+          <option value="part">파트별 / By Part</option>
+        </select>
+      </div>
+
+      <div class="option-group">
+        <label for="note_style">시각화 스타일 / Visual Style</label>
+        <select id="note_style" name="note_style">
+          <option value="standard" selected>기본 / Standard</option>
+          <option value="djeq">DJ EQ Max</option>
+        </select>
+      </div>
+
+      <div class="option-group">
         <label for="custom_bg">배경색 / Background</label>
         <div style="display:flex; gap:8px; align-items:center;">
           <input type="color" id="custom_bg" name="custom_bg" value="#0F0F14" style="width:42px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface2); cursor:pointer; padding:2px;" />
@@ -504,6 +522,28 @@
         </div>
         <label class="toggle">
           <input type="checkbox" id="audio" name="audio" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">네온 버스트 / Neon Burst</span>
+          <span class="label-sub">건반 타격 시 네온 효과</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="neon_burst" name="neon_burst" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">가이드라인 / Guide Lines</span>
+          <span class="label-sub">배경 가이드 라인 표시</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="guide_lines" name="guide_lines" checked />
           <div class="toggle-track"></div>
         </label>
       </div>
@@ -628,7 +668,10 @@
     const fd = new FormData();
     fd.append('file', selectedFile);
     fd.append('theme',       document.getElementById('theme').value);
-    fd.append('color_mode',  'rainbow_octave');
+    fd.append('color_mode',  document.getElementById('color_mode').value);
+    fd.append('note_style',  document.getElementById('note_style').value);
+    fd.append('neon_burst',  document.getElementById('neon_burst').checked  ? 'on' : 'off');
+    fd.append('guide_lines', document.getElementById('guide_lines').checked ? 'on' : 'off');
     if (document.getElementById('custom_bg_enabled').checked) {
       fd.append('custom_bg', document.getElementById('custom_bg').value);
     }

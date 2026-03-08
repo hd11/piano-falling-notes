@@ -49,9 +49,11 @@ class VideoGenerator:
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette, single_color=config.single_note_color)
         keyboard = KeyboardRenderer(layout, color_scheme)
-        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys)
+        falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
+                                       note_duration_ratio=config.note_duration_ratio,
+                                       guide_lines=config.guide_lines)
         effects = VisualEffects()
 
         # 4. Calculate total frames
@@ -82,6 +84,7 @@ class VideoGenerator:
 
         print(f"Rendering {total_frames} frames ({total_time:.1f}s @ {layout.fps}fps)...")
 
+        prev_active = set()
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in tqdm(range(total_frames), desc="Rendering"):
                 current_time = frame_idx / layout.fps - lead_in
@@ -103,6 +106,17 @@ class VideoGenerator:
                     if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds:
                         active[n.midi_number] = n.velocity
 
+                # Newly struck keys this frame
+                newly_active = {m: v for m, v in active.items() if m not in prev_active}
+
+                # DJ EQ Max visualization
+                if config.note_style == "djeq" and active:
+                    frame = effects.apply_dj_eq(frame, active, keyboard.keys, layout.keyboard_top, color_scheme)
+
+                # Neon burst on key strike
+                if config.neon_burst and newly_active:
+                    frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
+
                 # Glow effects at keyboard line
                 if config.glow_enabled and active:
                     frame = effects.apply_note_glow(
@@ -115,6 +129,7 @@ class VideoGenerator:
                 frame.paste(kb_img, (0, layout.keyboard_top))
 
                 writer.write_frame(frame)
+                prev_active = set(active.keys())
 
         # 7. Mux audio if available
         if audio_path:

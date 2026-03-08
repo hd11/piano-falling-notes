@@ -36,6 +36,15 @@ def main():
         config.no_audio = True
     if args.color_mode:
         config.color_mode = args.color_mode
+    if args.note_color:
+        hex_str = args.note_color.lstrip('#')
+        config.single_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    if args.note_style:
+        config.note_style = args.note_style
+    if args.no_neon_burst:
+        config.neon_burst = False
+    if args.no_guide_lines:
+        config.guide_lines = False
     if args.theme:
         config.theme = args.theme
     if args.background:

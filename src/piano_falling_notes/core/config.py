@@ -22,7 +22,8 @@ class Config:
 
     # Colors
     background_color: tuple = (15, 15, 20)
-    color_mode: str = "rainbow_octave"
+    color_mode: str = "single"  # options: single, rainbow, neon, part
+    single_note_color: tuple = (0, 210, 210)  # cyan/teal default for single mode
     note_opacity: float = 0.95
     theme: str = "auto"
     custom_background: tuple | None = None
@@ -37,6 +38,10 @@ class Config:
     glow_intensity: float = 0.7
     particles_enabled: bool = False
     note_border_radius: float = 4.0
+    neon_burst: bool = True  # neon burst on key strike
+    guide_lines: bool = True  # background guide lines
+    note_style: str = "standard"  # "standard" or "djeq" (DJ EQ Max visualization)
+    note_duration_ratio: float = 0.95  # visual shortening ratio for note separation
 
     # Timing
     lead_in_seconds: float = 2.0
@@ -53,7 +58,7 @@ class Config:
         with open(path) as f:
             data = yaml.safe_load(f)
         # Handle tuple fields that come as lists from YAML
-        for key in ('background_color', 'white_key_color', 'black_key_color', 'piano_range'):
+        for key in ('background_color', 'white_key_color', 'black_key_color', 'piano_range', 'single_note_color'):
             if key in data and isinstance(data[key], list):
                 data[key] = tuple(data[key])
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
