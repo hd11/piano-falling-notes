@@ -130,6 +130,7 @@ class VideoGenerator:
                         _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
                     else:                                  # orange/red (0.90 ~ 1.0 — 10%)
                         _wc, _bc = _PAL_HIGH
+                    color_scheme.mode = "key_type"
                     color_scheme.white_key_note_color = _wc
                     color_scheme.black_key_note_color = _bc
 

@@ -53,6 +53,10 @@ def main():
         config.guide_lines = False
     if args.glitter:
         config.glitter = True
+    if args.no_comet:
+        config.comet_effect = False
+    if args.no_energy_color:
+        config.energy_color = False
     if args.theme:
         config.theme = args.theme
     if args.background:
