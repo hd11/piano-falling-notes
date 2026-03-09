@@ -20,6 +20,7 @@ class FallingNotesRenderer:
         note_duration_ratio: float = 0.95,
         guide_lines: bool = True,
         glitter: bool = False,
+        velocity_effect: bool = False,
     ):
         self.layout = layout
         self.colors = color_scheme
@@ -27,6 +28,7 @@ class FallingNotesRenderer:
         self.note_duration_ratio = note_duration_ratio
         self.guide_lines = guide_lines
         self.glitter = glitter
+        self.velocity_effect = velocity_effect
         self._note_color_cache = {}  # {(midi, start_seconds): color_rgb} — fixed on first render
 
     def render_guide_lines(self, img: Image.Image) -> None:
@@ -83,6 +85,10 @@ class FallingNotesRenderer:
                 self._note_color_cache[cache_key] = color_rgba[:3]
             color_rgb = self._note_color_cache[cache_key]
 
+            if self.velocity_effect:
+                brightness = 0.4 + 0.6 * note.velocity
+                color_rgb = tuple(int(c * brightness) for c in color_rgb)
+
             # Pillow's rounded_rectangle requires integer coords
             rect = [
                 int(x0),
@@ -126,7 +132,13 @@ class FallingNotesRenderer:
                 row_offsets = np.arange(gy0, gy1, dtype=np.float32) - y0i
                 t = row_offsets / max(note_h - 1, 1)
                 # Full-height gradient: white at top (t=0) fading to pure color at bottom (t=1)
-                white_mix = (0.7 * (1.0 - t)).reshape(h_region, 1)  # (H, 1)
+                base_intensity = 0.7
+                if self.velocity_effect:
+                    # Scale gradient intensity by velocity (0-1 → 0.3-1.0 range)
+                    vel = note.velocity
+                    vel_scale = 0.3 + vel * 0.7
+                    base_intensity *= vel_scale
+                white_mix = (base_intensity * (1.0 - t)).reshape(h_region, 1)  # (H, 1)
 
                 # Gradient target colors broadcast over width
                 base_r = cr * (1.0 - white_mix) + 255.0 * white_mix  # (H, 1)

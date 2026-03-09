@@ -57,11 +57,31 @@ def main():
         config.comet_effect = False
     if args.no_energy_color:
         config.energy_color = False
+    if args.no_starflow:
+        config.starflow = False
     if args.theme:
         config.theme = args.theme
     if args.background:
         hex_str = args.background.lstrip('#')
         config.custom_background = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    if args.audio_file:
+        config.audio_file = args.audio_file
+    if args.soundfont:
+        config.soundfont = args.soundfont
+    if args.reverb:
+        config.reverb = True
+    if args.vertical:
+        config.vertical = True
+        # Swap to portrait defaults if user didn't specify dimensions
+        if args.width is None and args.height is None:
+            config.width = 1080
+            config.height = 1920
+    if args.background_image:
+        config.background_image = args.background_image
+    if args.velocity_effect:
+        config.velocity_effect = True
+    if args.pedal:
+        config.pedal = True
 
     # Generate
     generator = VideoGenerator()

@@ -55,6 +55,21 @@ class Config:
 
     # Audio
     no_audio: bool = False
+    audio_file: str = ""        # external audio file path (skip synthesis)
+    soundfont: str = ""         # custom soundfont path (.sf2/.sf3)
+    reverb: bool = False        # enable fluidsynth reverb
+
+    # Layout modes
+    vertical: bool = False      # vertical (portrait) video mode
+
+    # Background
+    background_image: str = ""  # background image path
+
+    # Note rendering
+    velocity_effect: bool = False  # velocity-based brightness scaling
+
+    # Pedal
+    pedal: bool = False         # sustain pedal visualization
 
     # Piano range
     piano_range: tuple = (21, 108)

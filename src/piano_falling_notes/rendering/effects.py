@@ -767,6 +767,34 @@ class VisualEffects:
 
         return Image.fromarray(arr)
 
+    def apply_pedal_glow(
+        self,
+        img: Image.Image,
+        keyboard_top: int,
+        width: int,
+    ) -> Image.Image:
+        """Render a subtle warm glow bar at the bottom of the note area when sustain pedal is active."""
+        glow_height = 12
+        strip_top = max(0, keyboard_top - glow_height)
+        strip_bottom = keyboard_top
+
+        arr = np.array(img)
+        strip = arr[strip_top:strip_bottom].astype(np.float32)
+        h = strip_bottom - strip_top
+
+        # Warm amber glow color
+        pedal_color = np.array([255, 180, 60], dtype=np.float32)
+
+        # Vertical fade: stronger at bottom (keyboard line), fading up
+        fade_v = np.linspace(0.0, 0.35, h).reshape(h, 1, 1)
+
+        # Apply glow across full width
+        glow = np.ones((h, width, 3), dtype=np.float32) * pedal_color * fade_v
+        strip = np.minimum(strip + glow, 255.0)
+
+        arr[strip_top:strip_bottom] = strip.astype(np.uint8)
+        return Image.fromarray(arr)
+
     def apply_starflow(
         self,
         img: Image.Image,
@@ -882,3 +910,4 @@ class VisualEffects:
             arr[strip_top:strip_bottom] = np.minimum(strip + overlay, 255.0).astype(np.uint8)
 
         return Image.fromarray(arr)
+

@@ -4,6 +4,7 @@ import music21.chord
 import music21.tempo
 import music21.meter
 import music21.key
+import music21.expressions
 
 from .models import NoteEvent
 
@@ -28,8 +29,96 @@ def _tie_continues(note) -> bool:
     return note.tie.type in ("start", "continue")
 
 
+def _extract_pedal_events(score, divisions: int, tempo_map: list) -> list[dict]:
+    """Extract sustain pedal events from score.
+
+    Returns list of {start_seconds, end_seconds} for each pedal down/up pair.
+    Looks for PedalMark expressions (start/stop) in the MusicXML, then falls
+    back to MIDI CC64 controller events.
+    """
+
+    def _ticks_to_seconds(ticks, t_map):
+        """Convert tick position to seconds using tempo map."""
+        seconds = 0.0
+        prev_tick = 0
+        prev_bpm = t_map[0][1]
+        for map_tick, map_bpm in t_map:
+            if map_tick >= ticks:
+                break
+            if map_tick > prev_tick:
+                seconds += (map_tick - prev_tick) / divisions * (60.0 / prev_bpm)
+            prev_tick = map_tick
+            prev_bpm = map_bpm
+        seconds += (ticks - prev_tick) / divisions * (60.0 / prev_bpm)
+        return seconds
+
+    pedal_events = []
+
+    from music21.expressions import PedalMark as _PedalMark
+
+    # Method 1: Look for PedalMark expressions (start/stop pairs)
+    for part in score.parts:
+        flat = part.flatten()
+        pedal_marks = []
+        for el in flat.getElementsByClass(_PedalMark):
+            offset_ticks = int(round(float(el.offset) * divisions))
+            pedal_marks.append((offset_ticks, el))
+
+        # Pair start/stop marks
+        pedal_on_tick = None
+        for ticks, mark in sorted(pedal_marks, key=lambda x: x[0]):
+            # PedalMark with form "start" or type containing "start"
+            form_str = str(getattr(mark, 'pedalForm', '')).lower()
+            is_start = 'start' in form_str or form_str == ''
+            is_stop = 'stop' in form_str or 'change' in form_str
+
+            if pedal_on_tick is None and not is_stop:
+                pedal_on_tick = ticks
+            elif pedal_on_tick is not None and is_stop:
+                pedal_events.append({
+                    'start_seconds': _ticks_to_seconds(pedal_on_tick, tempo_map),
+                    'end_seconds': _ticks_to_seconds(ticks, tempo_map),
+                })
+                # "change" means release+repress immediately
+                if 'change' in form_str:
+                    pedal_on_tick = ticks
+                else:
+                    pedal_on_tick = None
+
+    # Method 2: Fall back to MIDI controller 64 events (sustain pedal)
+    if not pedal_events:
+        try:
+            import music21.midi
+            import music21.midi.translate
+            mf = music21.midi.translate.streamToMidiFile(score)
+            for track in mf.tracks:
+                pedal_on_tick = None
+                running_tick = 0
+                for event in track.events:
+                    running_tick += event.time if hasattr(event, 'time') else 0
+                    if (hasattr(event, 'type') and
+                        event.type == music21.midi.ChannelVoiceMessages.CONTROLLER_CHANGE and
+                        hasattr(event, 'parameter1') and event.parameter1 == 64):
+                        if hasattr(event, 'parameter2'):
+                            if event.parameter2 >= 64 and pedal_on_tick is None:
+                                pedal_on_tick = running_tick
+                            elif event.parameter2 < 64 and pedal_on_tick is not None:
+                                pedal_events.append({
+                                    'start_seconds': _ticks_to_seconds(pedal_on_tick, tempo_map),
+                                    'end_seconds': _ticks_to_seconds(running_tick, tempo_map),
+                                })
+                                pedal_on_tick = None
+        except Exception:
+            pass
+
+    return pedal_events
+
+
 def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
-    """Returns (notes_list, metadata_dict)"""
+    """Returns (notes_list, metadata_dict).
+
+    Accepts MusicXML (.musicxml, .mxl, .xml) and MIDI (.mid, .midi) files.
+    """
     score = music21.converter.parse(filepath)
 
     # --- metadata ---
@@ -104,6 +193,9 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
         except Exception:
             pass
 
+    # Extract pedal events
+    pedal_events = _extract_pedal_events(score, divisions, tempo_map)
+
     metadata = {
         "title": title,
         "tempo_bpm": tempo_bpm,
@@ -113,6 +205,7 @@ def parse_musicxml(filepath: str) -> tuple[list[NoteEvent], dict]:
         "key_signature": key_signature,
         "key_mode": key_mode,
         "tempo_map": tempo_map,
+        "pedal_events": pedal_events,
     }
 
     # --- notes ---

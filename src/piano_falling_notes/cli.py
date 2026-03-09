@@ -4,10 +4,10 @@ from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Generate falling notes piano video from MusicXML'
+        description='Generate falling notes piano video from MusicXML or MIDI'
     )
     # Web server mode (mutually exclusive with input file)
-    parser.add_argument('input', nargs='?', default=None, help='MusicXML file path (omit when using --web)')
+    parser.add_argument('input', nargs='?', default=None, help='MusicXML or MIDI file path (.musicxml, .mxl, .xml, .mid, .midi)')
     parser.add_argument('-o', '--output', default=None, help='Output MP4 path (default: <input_name>.mp4)')
     parser.add_argument('--config', default=None, help='YAML config file path')
     parser.add_argument('--width', type=int, default=None)
@@ -28,7 +28,15 @@ def parse_args():
     parser.add_argument('--no-glow', action='store_true', help='Disable glow effects')
     parser.add_argument('--no-comet', action='store_true', help='Disable comet effect')
     parser.add_argument('--no-energy-color', action='store_true', help='Disable energy-based color')
+    parser.add_argument('--no-starflow', action='store_true', help='Disable ambient starflow effect')
     parser.add_argument('--no-audio', action='store_true', help='Disable audio generation')
+    parser.add_argument('--audio-file', default=None, help='External audio file path (skip synthesis)')
+    parser.add_argument('--soundfont', default=None, help='Custom soundfont path (.sf2/.sf3)')
+    parser.add_argument('--reverb', action='store_true', help='Enable fluidsynth reverb')
+    parser.add_argument('--vertical', action='store_true', help='Vertical (portrait) video mode')
+    parser.add_argument('--background-image', default=None, help='Background image path (.jpg/.png/.webp)')
+    parser.add_argument('--velocity-effect', action='store_true', help='Velocity-based note brightness scaling')
+    parser.add_argument('--pedal', action='store_true', help='Sustain pedal visualization')
     parser.add_argument('--glow-intensity', type=float, default=None)
     # Web server options
     parser.add_argument('--web', action='store_true', help='Start web UI server')

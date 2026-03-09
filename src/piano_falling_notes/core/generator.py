@@ -43,7 +43,24 @@ class VideoGenerator:
         bg = config.custom_background if config.custom_background else theme.background_color
         config.background_color = bg
 
-        # 4. Setup rendering
+        # 4. Adjust keyboard ratio for vertical mode
+        if config.vertical:
+            config.keyboard_height_ratio = 0.10
+
+        # 4a. Load background image if specified
+        background_img = None
+        if config.background_image:
+            try:
+                background_img = Image.open(config.background_image).convert('RGB')
+                background_img = background_img.resize(
+                    (config.width, config.height), Image.LANCZOS
+                )
+                print(f"  Background image: {config.background_image}")
+            except Exception as e:
+                print(f"  Background image load failed: {e}, using solid color")
+                background_img = None
+
+        # 4b. Setup rendering
         layout = Layout(
             width=config.width, height=config.height, fps=config.fps,
             keyboard_height_ratio=config.keyboard_height_ratio,
@@ -54,7 +71,8 @@ class VideoGenerator:
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
                                        guide_lines=config.guide_lines,
-                                       glitter=config.glitter)
+                                       glitter=config.glitter,
+                                       velocity_effect=config.velocity_effect)
         effects = VisualEffects()
 
         # 4. Calculate total frames
@@ -64,12 +82,18 @@ class VideoGenerator:
 
         # 5. Generate audio
         audio_path = None
-        if not config.no_audio:
+        if config.audio_file:
+            # Use external audio file directly
+            audio_path = config.audio_file
+            print(f"  Using external audio: {audio_path}")
+        elif not config.no_audio:
             try:
                 print("Generating audio...")
                 audio_path = str(Path(config.output_path).with_suffix('.wav'))
                 project_root = str(Path(__file__).resolve().parents[3])
-                generate_audio(config.input_path, audio_path, project_root)
+                generate_audio(config.input_path, audio_path, project_root,
+                               soundfont_path=config.soundfont,
+                               reverb=config.reverb)
                 print(f"  Audio: {audio_path}")
             except Exception as e:
                 print(f"  Audio generation failed: {e}")
@@ -135,7 +159,10 @@ class VideoGenerator:
                     color_scheme.black_key_note_color = _bc
 
                 # Background
-                frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
+                if background_img is not None:
+                    frame = background_img.copy()
+                else:
+                    frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
 
                 # Query visible notes
                 view_start = current_time
@@ -186,6 +213,17 @@ class VideoGenerator:
                     layout.keyboard_top, color_scheme, current_time,
                 )
 
+                # Pedal visualization
+                if config.pedal and metadata.get('pedal_events'):
+                    pedal_active = any(
+                        pe['start_seconds'] <= current_time < pe['end_seconds']
+                        for pe in metadata['pedal_events']
+                    )
+                    if pedal_active:
+                        frame = effects.apply_pedal_glow(
+                            frame, layout.keyboard_top, layout.width,
+                        )
+
                 # Render keyboard (paste at bottom)
                 kb_img = keyboard.render(active)
                 frame.paste(kb_img, (0, layout.keyboard_top))
@@ -200,7 +238,9 @@ class VideoGenerator:
                             audio_offset=lead_in)
             # Cleanup temp files
             Path(video_only_path).unlink(missing_ok=True)
-            Path(audio_path).unlink(missing_ok=True)
+            # Don't delete user-provided external audio file
+            if not config.audio_file:
+                Path(audio_path).unlink(missing_ok=True)
 
         print(f"Done! Output: {config.output_path}")
         return config.output_path

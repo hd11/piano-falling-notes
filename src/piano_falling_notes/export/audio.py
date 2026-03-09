@@ -52,17 +52,18 @@ def musicxml_to_midi(musicxml_path: str, midi_path: str) -> str:
 
 
 def midi_to_wav(midi_path: str, wav_path: str, soundfont_path: str,
-                sample_rate: int = 44100) -> str:
+                sample_rate: int = 44100, reverb: bool = False) -> str:
     """Synthesize MIDI to WAV using fluidsynth."""
     fluidsynth = shutil.which("fluidsynth")
     if not fluidsynth:
         raise RuntimeError("fluidsynth not found. Install with: brew install fluidsynth")
 
-    result = subprocess.run(
-        [fluidsynth, "-ni", "-F", wav_path, "-r", str(sample_rate),
-         soundfont_path, midi_path],
-        capture_output=True, text=True,
-    )
+    cmd = [fluidsynth, "-ni", "-F", wav_path, "-r", str(sample_rate)]
+    if reverb:
+        cmd += ["-o", "synth.reverb.active=1"]
+    cmd += [soundfont_path, midi_path]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if not Path(wav_path).exists() or Path(wav_path).stat().st_size == 0:
         raise RuntimeError(f"fluidsynth failed: {result.stderr[-500:]}")
     return wav_path
@@ -83,10 +84,13 @@ def mux_video_audio(video_path: str, audio_path: str, output_path: str,
     return output_path
 
 
-def generate_audio(musicxml_path: str, wav_path: str,
-                   project_root: str = ".") -> str:
+def generate_audio(musicxml_path: str, wav_path: str, project_root: str = ".",
+                   soundfont_path: str | None = None, reverb: bool = False) -> str:
     """Full pipeline: MusicXML → MIDI → WAV."""
-    sf = find_soundfont(project_root)
+    if soundfont_path and Path(soundfont_path).exists():
+        sf = soundfont_path
+    else:
+        sf = find_soundfont(project_root)
     if not sf:
         raise RuntimeError("No soundfont found. Place a .sf2 file in config/")
 
@@ -95,6 +99,6 @@ def generate_audio(musicxml_path: str, wav_path: str,
 
     print(f"  Generating audio with soundfont: {Path(sf).name}")
     musicxml_to_midi(musicxml_path, midi_path)
-    midi_to_wav(midi_path, wav_path, sf)
+    midi_to_wav(midi_path, wav_path, sf, reverb=reverb)
     Path(midi_path).unlink(missing_ok=True)
     return wav_path

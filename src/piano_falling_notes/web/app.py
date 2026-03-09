@@ -30,6 +30,92 @@ executor_pool = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_JOBS)
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 
 
+def _parse_hex_color(hex_str):
+    """Parse '#RRGGBB' string to (R, G, B) tuple. Returns None if invalid."""
+    if hex_str and hex_str.startswith('#') and len(hex_str) == 7:
+        h = hex_str.lstrip('#')
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    return None
+
+
+def _parse_config_from_form(form):
+    """Parse web form fields into Config, matching CLI options."""
+    from ..core.config import Config
+    config = Config()
+    config.theme = "classic"  # hardcoded, no theme selector in web UI
+
+    # --width / --height (resolution)
+    resolution = form.get('resolution', '1080p')
+    if resolution == '720p':
+        config.width = 1280
+        config.height = 720
+    else:
+        config.width = 1920
+        config.height = 1080
+
+    # --fps
+    config.fps = 30 if form.get('fps', '60') == '30' else 60
+
+    # --color-mode
+    color_mode = form.get('color_mode', 'key_type')
+    if color_mode in ('single', 'rainbow', 'neon', 'part', 'key_type'):
+        config.color_mode = color_mode
+
+    # --note-color
+    c = _parse_hex_color(form.get('single_note_color', '').strip())
+    if c:
+        config.single_note_color = c
+
+    # --white-key-color
+    c = _parse_hex_color(form.get('white_key_note_color', '').strip())
+    if c:
+        config.white_key_note_color = c
+
+    # --black-key-color
+    c = _parse_hex_color(form.get('black_key_note_color', '').strip())
+    if c:
+        config.black_key_note_color = c
+
+    # --background
+    c = _parse_hex_color(form.get('background', '').strip())
+    if c:
+        config.custom_background = c
+
+    # Effect toggles (CLI: --no-* flags)
+    config.energy_color = (form.get('energy_color', 'on') == 'on')
+    config.comet_effect = (form.get('comet_effect', 'on') == 'on')
+    config.starflow = (form.get('starflow', 'on') == 'on')
+    config.neon_burst = (form.get('neon_burst', 'on') == 'on')
+    config.glow_enabled = (form.get('glow', 'on') == 'on')
+    config.guide_lines = (form.get('guide_lines', 'on') == 'on')
+    config.glitter = (form.get('glitter', 'off') == 'on')
+
+    # --no-audio
+    config.no_audio = (form.get('audio', 'on') != 'on')
+
+    # --reverb
+    config.reverb = (form.get('reverb', 'off') == 'on')
+
+    # --vertical
+    config.vertical = (form.get('vertical', 'off') == 'on')
+    if config.vertical:
+        # Swap to portrait dimensions
+        if resolution == '720p':
+            config.width = 720
+            config.height = 1280
+        else:
+            config.width = 1080
+            config.height = 1920
+
+    # --velocity-effect
+    config.velocity_effect = (form.get('velocity_effect', 'off') == 'on')
+
+    # --pedal
+    config.pedal = (form.get('pedal', 'off') == 'on')
+
+    return config
+
+
 def cleanup_old_jobs():
     """Remove jobs and files older than 1 hour."""
     cutoff = time.time() - 3600
@@ -53,6 +139,7 @@ def run_conversion(job_id, input_path, config):
     from ..rendering.notes import FallingNotesRenderer
     from ..rendering.effects import VisualEffects
     from ..rendering.colors import ColorScheme
+    from ..rendering.themes import THEMES
     from ..export.video_writer import VideoWriter
     from ..export.audio import generate_audio, mux_video_audio
     from PIL import Image
@@ -77,17 +164,25 @@ def run_conversion(job_id, input_path, config):
 
         update('rendering', progress=0)
 
-        # 3. Apply theme
-        from ..rendering.themes import THEMES, auto_select_theme
-        if config.theme == "auto":
-            theme = auto_select_theme(metadata)
-        elif config.theme in THEMES:
-            theme = THEMES[config.theme]
-        else:
-            theme = THEMES["classic"]
-
+        # 3. Use classic theme palette (no theme selector in web UI)
+        theme = THEMES["classic"]
         bg = config.custom_background if config.custom_background else theme.background_color
         config.background_color = bg
+
+        # Adjust keyboard ratio for vertical mode
+        if config.vertical:
+            config.keyboard_height_ratio = 0.10
+
+        # Load background image if specified
+        background_img = None
+        if config.background_image:
+            try:
+                background_img = Image.open(config.background_image).convert('RGB')
+                background_img = background_img.resize(
+                    (config.width, config.height), Image.LANCZOS
+                )
+            except Exception:
+                background_img = None
 
         # 4. Setup rendering
         layout = Layout(
@@ -97,35 +192,44 @@ def run_conversion(job_id, input_path, config):
             keyboard_height_ratio=config.keyboard_height_ratio,
             lookahead_seconds=config.lookahead_seconds,
         )
-        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette, single_color=config.single_note_color, white_key_note_color=config.white_key_note_color, black_key_note_color=config.black_key_note_color)
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette,
+                                   single_color=config.single_note_color,
+                                   white_key_note_color=config.white_key_note_color,
+                                   black_key_note_color=config.black_key_note_color)
         keyboard = KeyboardRenderer(layout, color_scheme)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
                                        guide_lines=config.guide_lines,
-                                       glitter=config.glitter)
+                                       glitter=config.glitter,
+                                       velocity_effect=config.velocity_effect)
         effects = VisualEffects()
 
-        # 4. Calculate total frames
+        # 5. Calculate total frames
         lead_in = config.lead_in_seconds
         total_time = timeline.total_duration + lead_in + config.tail_seconds
         total_frames = int(total_time * layout.fps)
         update('rendering', progress=0, total_frames=total_frames)
 
-        # 5. Generate audio
+        # 6. Generate audio
         audio_path = None
-        if not config.no_audio:
+        if config.audio_file and Path(config.audio_file).exists():
+            # Use external audio file directly
+            audio_path = config.audio_file
+        elif not config.no_audio:
             try:
                 update('audio', progress=0)
                 stem = Path(input_path).stem
                 audio_path = str(Path(app.config['OUTPUT_FOLDER']) / f'{stem}_{job_id}.wav')
                 project_root_path = str(Path(__file__).resolve().parents[3])
-                generate_audio(input_path, audio_path, project_root_path)
+                generate_audio(input_path, audio_path, project_root_path,
+                               soundfont_path=config.soundfont if config.soundfont else None,
+                               reverb=config.reverb)
             except Exception as e:
                 audio_path = None
 
         update('rendering', progress=0)
 
-        # 6. Render video frames
+        # 7. Render video frames
         stem = Path(input_path).stem
         output_path = str(Path(app.config['OUTPUT_FOLDER']) / f'{stem}_{job_id}.mp4')
 
@@ -134,12 +238,15 @@ def run_conversion(job_id, input_path, config):
         else:
             video_only_path = output_path
 
-        prev_active = {}  # {midi: start_seconds} of last frame's active notes
+        prev_active = {}
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in range(total_frames):
                 current_time = frame_idx / layout.fps - lead_in
 
-                frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
+                if background_img is not None:
+                    frame = background_img.copy()
+                else:
+                    frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
 
                 view_start = current_time
                 view_end = current_time + layout.lookahead_seconds
@@ -147,37 +254,33 @@ def run_conversion(job_id, input_path, config):
 
                 frame = falling.render(frame, visible, current_time)
 
-                # Find currently playing notes (for keyboard highlighting)
-                # Apply note_duration_ratio so repeated notes show a release gap
+                # Find currently playing notes
                 active = {}
-                active_starts = {}  # {midi: start_seconds} to identify specific note instance
+                active_starts = {}
                 for n in visible:
                     if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds * config.note_duration_ratio:
                         active[n.midi_number] = n.velocity
                         active_starts[n.midi_number] = n.start_seconds
 
-                # Newly struck = new midi OR same midi but different note (re-strike)
+                # Newly struck
                 newly_active = {}
                 for m, v in active.items():
                     if m not in prev_active or active_starts[m] != prev_active[m]:
                         newly_active[m] = v
 
-                # DJ EQ Max visualization
-                if config.note_style == "djeq" and active:
-                    frame = effects.apply_dj_eq(frame, active, keyboard.keys, layout.keyboard_top, color_scheme)
-
                 # Neon burst on key strike
                 if config.neon_burst and newly_active:
                     frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
 
-                # C note guide-line rise effect (comet effect)
+                # Comet effect
                 if config.comet_effect:
                     frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
-                # Ambient starflow (every frame)
+                # Starflow
                 if config.starflow:
                     frame = effects.apply_starflow(frame, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
+                # Glow
                 if config.glow_enabled and active:
                     frame = effects.apply_note_glow(
                         frame, active, keyboard.keys,
@@ -190,34 +293,44 @@ def run_conversion(job_id, input_path, config):
                     layout.keyboard_top, color_scheme,
                 )
 
+                # Pedal visualization
+                if config.pedal and metadata.get('pedal_events'):
+                    pedal_active = any(
+                        pe['start_seconds'] <= current_time < pe['end_seconds']
+                        for pe in metadata['pedal_events']
+                    )
+                    if pedal_active:
+                        frame = effects.apply_pedal_glow(
+                            frame, layout.keyboard_top, layout.width,
+                        )
+
                 kb_img = keyboard.render(active)
                 frame.paste(kb_img, (0, layout.keyboard_top))
 
                 writer.write_frame(frame)
                 prev_active = active_starts
 
-                # Update progress every 30 frames
                 if frame_idx % 30 == 0:
                     update('rendering', progress=frame_idx)
 
         update('encoding', progress=total_frames)
 
-        # 7. Mux audio
+        # 8. Mux audio
         if audio_path:
             mux_video_audio(video_only_path, audio_path, output_path, audio_offset=lead_in)
             Path(video_only_path).unlink(missing_ok=True)
-            Path(audio_path).unlink(missing_ok=True)
+            # Don't delete user-provided external audio file
+            if not config.audio_file:
+                Path(audio_path).unlink(missing_ok=True)
 
         with jobs_lock:
             jobs[job_id]['status'] = 'done'
             jobs[job_id]['progress'] = total_frames
             jobs[job_id]['output_path'] = output_path
 
-        # Clean up input file
         Path(input_path).unlink(missing_ok=True)
 
     except Exception as e:
-        # Sanitize error: don't expose internal paths or stack traces
         error_msg = str(e)
         if '/' in error_msg or '\\' in error_msg:
             error_msg = "Conversion failed. Please check your input file."
@@ -244,86 +357,46 @@ def convert():
         return jsonify({'error': 'Empty filename'}), 400
 
     ext = Path(f.filename).suffix.lower()
-    if ext not in ('.musicxml', '.mxl', '.xml'):
-        return jsonify({'error': 'Invalid file type. Upload a .musicxml or .mxl file'}), 400
+    if ext not in ('.musicxml', '.mxl', '.xml', '.mid', '.midi'):
+        return jsonify({'error': 'Invalid file type. Upload a .musicxml, .mxl, or .mid file'}), 400
 
     job_id = str(uuid.uuid4())
     safe_name = f'{job_id}{ext}'
     input_path = str(Path(app.config['UPLOAD_FOLDER']) / safe_name)
     f.save(input_path)
 
-    # Parse options
-    from ..core.config import Config
-    config = Config()
+    config = _parse_config_from_form(request.form)
     config.input_path = input_path
 
-    color_mode = request.form.get('color_mode', 'single')
-    if color_mode in ('single', 'rainbow', 'neon', 'part', 'key_type'):
-        config.color_mode = color_mode
+    # Handle audio file upload
+    if 'audio_file' in request.files:
+        af = request.files['audio_file']
+        if af.filename:
+            af_ext = Path(af.filename).suffix.lower()
+            if af_ext in ('.mp3', '.wav', '.ogg', '.flac', '.m4a'):
+                af_path = str(Path(app.config['UPLOAD_FOLDER']) / f'{job_id}_audio{af_ext}')
+                af.save(af_path)
+                config.audio_file = af_path
 
-    single_color = request.form.get('single_note_color', '').strip()
-    if single_color and single_color.startswith('#') and len(single_color) == 7:
-        h = single_color.lstrip('#')
-        config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    # Handle background image upload
+    if 'background_image' in request.files:
+        bi = request.files['background_image']
+        if bi.filename:
+            bi_ext = Path(bi.filename).suffix.lower()
+            if bi_ext in ('.jpg', '.jpeg', '.png', '.webp'):
+                bi_path = str(Path(app.config['UPLOAD_FOLDER']) / f'{job_id}_bg{bi_ext}')
+                bi.save(bi_path)
+                config.background_image = bi_path
 
-    white_key_color_hex = request.form.get('white_key_note_color', '').strip()
-    if white_key_color_hex and white_key_color_hex.startswith('#') and len(white_key_color_hex) == 7:
-        h = white_key_color_hex.lstrip('#')
-        config.white_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-    black_key_color_hex = request.form.get('black_key_note_color', '').strip()
-    if black_key_color_hex and black_key_color_hex.startswith('#') and len(black_key_color_hex) == 7:
-        h = black_key_color_hex.lstrip('#')
-        config.black_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-    theme = request.form.get('theme', 'auto')
-    from ..rendering.themes import THEME_NAMES
-    if theme in THEME_NAMES or theme == 'auto':
-        config.theme = theme
-
-    custom_bg = request.form.get('custom_bg', '').strip()
-    if custom_bg and custom_bg.startswith('#') and len(custom_bg) == 7:
-        h = custom_bg.lstrip('#')
-        config.custom_background = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-    resolution = request.form.get('resolution', '1080p')
-    if resolution == '720p':
-        config.width = 1280
-        config.height = 720
-    else:
-        config.width = 1920
-        config.height = 1080
-
-    fps_val = request.form.get('fps', '60')
-    config.fps = 30 if fps_val == '30' else 60
-
-    note_style = request.form.get('note_style', 'standard')
-    if note_style in ('standard', 'djeq'):
-        config.note_style = note_style
-
-    neon_burst = request.form.get('neon_burst', 'on')
-    config.neon_burst = (neon_burst == 'on')
-
-    guide_lines = request.form.get('guide_lines', 'on')
-    config.guide_lines = (guide_lines == 'on')
-
-    glitter = request.form.get('glitter', 'off')
-    config.glitter = (glitter == 'on')
-
-    glow = request.form.get('glow', 'on')
-    config.glow_enabled = (glow == 'on')
-
-    audio = request.form.get('audio', 'on')
-    config.no_audio = (audio != 'on')
-
-    comet_effect = request.form.get('comet_effect', 'on')
-    config.comet_effect = (comet_effect == 'on')
-
-    energy_color = request.form.get('energy_color', 'on')
-    config.energy_color = (energy_color == 'on')
-
-    starflow = request.form.get('starflow', 'on')
-    config.starflow = (starflow == 'on')
+    # Handle soundfont upload
+    if 'soundfont' in request.files:
+        sf = request.files['soundfont']
+        if sf.filename:
+            sf_ext = Path(sf.filename).suffix.lower()
+            if sf_ext in ('.sf2', '.sf3'):
+                sf_path = str(Path(app.config['UPLOAD_FOLDER']) / f'{job_id}_sf{sf_ext}')
+                sf.save(sf_path)
+                config.soundfont = sf_path
 
     stem = Path(f.filename).stem
     config.output_path = str(Path(app.config['OUTPUT_FOLDER']) / f'{stem}_{job_id}.mp4')
@@ -358,7 +431,7 @@ def preview():
         return jsonify({'error': 'Empty filename'}), 400
 
     ext = Path(f.filename).suffix.lower()
-    if ext not in ('.musicxml', '.mxl', '.xml'):
+    if ext not in ('.musicxml', '.mxl', '.xml', '.mid', '.midi'):
         return jsonify({'error': 'Invalid file type'}), 400
 
     preview_id = str(uuid.uuid4())
@@ -375,80 +448,55 @@ def preview():
         from ..rendering.notes import FallingNotesRenderer
         from ..rendering.effects import VisualEffects
         from ..rendering.colors import ColorScheme
-        from ..rendering.themes import THEMES, auto_select_theme
-        from ..core.config import Config
+        from ..rendering.themes import THEMES
         from PIL import Image
         import io
 
-        config = Config()
+        config = _parse_config_from_form(request.form)
         config.input_path = input_path
-        config.width = 960
-        config.height = 540
 
-        # Parse form options (same as /convert)
-        color_mode = request.form.get('color_mode', 'single')
-        if color_mode in ('single', 'rainbow', 'neon', 'part', 'key_type'):
-            config.color_mode = color_mode
+        # Preview dimensions: smaller for speed, respect vertical
+        if config.vertical:
+            config.width = 540
+            config.height = 960
+            config.keyboard_height_ratio = 0.10
+        else:
+            config.width = 960
+            config.height = 540
 
-        single_color = request.form.get('single_note_color', '').strip()
-        if single_color and single_color.startswith('#') and len(single_color) == 7:
-            h = single_color.lstrip('#')
-            config.single_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-        white_key_color_hex = request.form.get('white_key_note_color', '').strip()
-        if white_key_color_hex and white_key_color_hex.startswith('#') and len(white_key_color_hex) == 7:
-            h = white_key_color_hex.lstrip('#')
-            config.white_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-        black_key_color_hex = request.form.get('black_key_note_color', '').strip()
-        if black_key_color_hex and black_key_color_hex.startswith('#') and len(black_key_color_hex) == 7:
-            h = black_key_color_hex.lstrip('#')
-            config.black_key_note_color = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-        theme = request.form.get('theme', 'auto')
-        from ..rendering.themes import THEME_NAMES
-        if theme in THEME_NAMES or theme == 'auto':
-            config.theme = theme
-
-        custom_bg = request.form.get('custom_bg', '').strip()
-        if custom_bg and custom_bg.startswith('#') and len(custom_bg) == 7:
-            h = custom_bg.lstrip('#')
-            config.custom_background = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-
-        glitter = request.form.get('glitter', 'off')
-        config.glitter = (glitter == 'on')
-
-        guide_lines = request.form.get('guide_lines', 'on')
-        config.guide_lines = (guide_lines == 'on')
-
-        comet_effect = request.form.get('comet_effect', 'on')
-        config.comet_effect = (comet_effect == 'on')
-
-        energy_color = request.form.get('energy_color', 'on')
-        config.energy_color = (energy_color == 'on')
-
-        starflow_opt = request.form.get('starflow', 'on')
-        config.starflow = (starflow_opt == 'on')
+        # Handle background image for preview
+        bg_img_preview = None
+        if 'background_image' in request.files:
+            bi = request.files['background_image']
+            if bi.filename:
+                bi_ext = Path(bi.filename).suffix.lower()
+                if bi_ext in ('.jpg', '.jpeg', '.png', '.webp'):
+                    bi_path = str(Path(app.config['UPLOAD_FOLDER']) / f'{preview_id}_bg{bi_ext}')
+                    bi.save(bi_path)
+                    try:
+                        bg_img_preview = Image.open(bi_path).convert('RGB')
+                        bg_img_preview = bg_img_preview.resize(
+                            (config.width, config.height), Image.LANCZOS
+                        )
+                    except Exception:
+                        bg_img_preview = None
+                    finally:
+                        Path(bi_path).unlink(missing_ok=True)
 
         # Parse and build
         notes, metadata = parse_musicxml(input_path)
         timeline = build_timeline(notes, metadata)
         time_index = TimeIndex(timeline.notes)
 
-        if config.theme == "auto":
-            theme_obj = auto_select_theme(metadata)
-        elif config.theme in THEMES:
-            theme_obj = THEMES[config.theme]
-        else:
-            theme_obj = THEMES["classic"]
-
-        bg = config.custom_background if config.custom_background else theme_obj.background_color
+        # Use classic theme palette
+        theme = THEMES["classic"]
+        bg = config.custom_background if config.custom_background else theme.background_color
         config.background_color = bg
 
         layout = Layout(width=config.width, height=config.height, fps=30,
                         keyboard_height_ratio=config.keyboard_height_ratio,
                         lookahead_seconds=config.lookahead_seconds)
-        color_scheme = ColorScheme(mode=config.color_mode, palette=theme_obj.palette,
+        color_scheme = ColorScheme(mode=config.color_mode, palette=theme.palette,
                                    single_color=config.single_note_color,
                                    white_key_note_color=config.white_key_note_color,
                                    black_key_note_color=config.black_key_note_color)
@@ -456,12 +504,19 @@ def preview():
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
                                        guide_lines=config.guide_lines,
-                                       glitter=config.glitter)
+                                       glitter=config.glitter,
+                                       velocity_effect=config.velocity_effect)
         effects = VisualEffects()
 
-        # Pick a time ~10% into the piece where notes are active
-        target_time = timeline.total_duration * 0.1
-        # Find a time with active notes
+        # Timeline scrubber: preview_time (0.0-1.0 ratio), default 0.1
+        preview_time_ratio = 0.1
+        try:
+            pt = float(request.form.get('preview_time', '0.1'))
+            if 0.0 <= pt <= 1.0:
+                preview_time_ratio = pt
+        except (ValueError, TypeError):
+            pass
+        target_time = timeline.total_duration * preview_time_ratio
         for t_try in [target_time, target_time + 2, target_time + 5, 5.0, 10.0]:
             view_start = t_try
             view_end = t_try + layout.lookahead_seconds
@@ -514,7 +569,10 @@ def preview():
             color_scheme.white_key_note_color = _wc
             color_scheme.black_key_note_color = _bc
 
-        frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
+        if bg_img_preview is not None:
+            frame = bg_img_preview.copy()
+        else:
+            frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
         frame = falling.render(frame, visible, current_time)
 
         # Ascending bubbles (render a few frames to seed particles)
@@ -526,19 +584,20 @@ def preview():
         frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys,
                                                 layout.keyboard_top, color_scheme, current_time)
 
-        # C note guide-line rise (comet effect)
+        # Comet effect
         if config.comet_effect:
             frame = effects.apply_c_note_rise(frame, active, active, keyboard.keys,
                                               layout.keyboard_top, color_scheme, current_time)
 
-        # Ambient starflow
+        # Starflow
         if config.starflow:
             frame = effects.apply_starflow(frame, active, keyboard.keys,
                                            layout.keyboard_top, color_scheme, current_time)
 
         # Glow
-        frame = effects.apply_note_glow(frame, active, keyboard.keys,
-                                        layout.keyboard_top, color_scheme, current_time)
+        if config.glow_enabled and active:
+            frame = effects.apply_note_glow(frame, active, keyboard.keys,
+                                            layout.keyboard_top, color_scheme, current_time)
 
         # Keyboard
         kb_img = keyboard.render(active)
@@ -570,7 +629,6 @@ def status(job_id):
         job = jobs.get(job_id)
         if job is None:
             return jsonify({'error': 'Job not found'}), 404
-        # Snapshot values under lock to avoid race conditions
         job_status = job['status']
         job_progress = job['progress']
         job_total = job.get('total_frames', 0)
@@ -608,7 +666,6 @@ def download(job_id):
     if not output_path or not Path(output_path).exists():
         return jsonify({'error': 'Output file missing'}), 404
 
-    # Get clean download name from original filename
     original = job.get('original_filename', '')
     if original:
         download_name = Path(original).stem + '.mp4'
