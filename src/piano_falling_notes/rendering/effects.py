@@ -561,32 +561,31 @@ class VisualEffects:
         import math
 
         # Spawn ONE firefly per newly struck note
+        _COLORS = [
+            np.array([255, 230,  80], dtype=np.float32),  # gold
+            np.array([255, 180,  50], dtype=np.float32),  # amber
+            np.array([255, 250, 180], dtype=np.float32),  # warm white
+        ]
         for midi, velocity in newly_active.items():
             key = key_map.get(midi)
             if key is None:
                 continue
             cx = key.x + key.width / 2.0
-            # Orbit radius scales with key width
-            orbit_r = max(key.width * 0.9, 14.0)
-            # Random starting angle and spin direction
+            # Large orbit radius so firefly is clearly visible (~80-120px)
+            orbit_r = np.random.uniform(80.0, 120.0)
             start_angle = np.random.uniform(0, 2 * math.pi)
-            spin_dir = np.random.choice([-1, 1])
-            # Spin speed (radians/frame): 0.18~0.28 rad → ~1 orbit per 22-35 frames
-            spin_speed = np.random.uniform(0.18, 0.28) * spin_dir
-            # Rise speed (px/frame upward)
-            rise_speed = np.random.uniform(1.8, 3.2)
-            # Gold/amber glow color
-            _COLORS = [
-                np.array([255, 230,  80], dtype=np.float32),  # gold
-                np.array([255, 180,  50], dtype=np.float32),  # amber
-                np.array([255, 250, 180], dtype=np.float32),  # warm white
-            ]
+            spin_dir = float(np.random.choice([-1, 1]))
+            # Slow graceful spin: ~0.10-0.15 rad/frame → 1 orbit in 42-63 frames (~1.5-2s)
+            spin_speed = np.random.uniform(0.10, 0.15) * spin_dir
+            # Moderate rise so it stays visible for full lifetime
+            rise_speed = np.random.uniform(2.0, 3.5)
             color = _COLORS[np.random.randint(0, len(_COLORS))].copy()
-            size = np.random.uniform(4.0, 7.0)
-            lifetime = np.random.randint(55, 85)
+            # Large prominent size: 14-20px
+            size = np.random.uniform(14.0, 20.0)
+            lifetime = np.random.randint(90, 130)
             self._firefly_particles.append({
-                'cx': cx,                    # orbit center x (fixed horizontally)
-                'cy': float(keyboard_top),   # orbit center y (rises each frame)
+                'cx': cx,
+                'cy': float(keyboard_top),
                 'orbit_r': orbit_r,
                 'angle': start_angle,
                 'spin_speed': spin_speed,
@@ -631,9 +630,9 @@ class VisualEffects:
             p['angle'] += p['spin_speed']
             p['cy'] -= p['rise_speed']
 
-            # Firefly world position
+            # Firefly world position — circular orbit (not flattened)
             px = p['cx'] + p['orbit_r'] * math.cos(p['angle'])
-            py = p['cy'] + p['orbit_r'] * math.sin(p['angle']) * 0.45  # flattened ellipse
+            py = p['cy'] + p['orbit_r'] * math.sin(p['angle'])
 
             size = p['size']
 
