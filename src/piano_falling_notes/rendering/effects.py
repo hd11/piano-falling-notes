@@ -77,6 +77,9 @@ class VisualEffects:
         self._burst_state = {}  # {midi: {color, intensity, cx, key_w, ray_angles, ray_lengths, frame}}
         self._wave_phase = 0.0  # persistent wave phase counter
         self._bubble_particles = []  # list of particle dicts
+        self._firefly_particles = []  # list of firefly particle dicts
+        self._star_particles = []    # list of star particle dicts
+        self._star_frame = 0         # frame counter for twinkling phase
 
     def apply_wave_ripple(
         self,
@@ -543,4 +546,239 @@ class VisualEffects:
 
         strip = np.clip(strip, 0, 255).astype(np.uint8)
         arr[strip_top:strip_bottom] = strip
+        return Image.fromarray(arr)
+
+    def apply_firefly_ascent(
+        self,
+        img: Image.Image,
+        newly_active: dict,   # {midi: velocity} of newly struck notes
+        key_map: dict,
+        keyboard_top: int,
+        color_scheme,          # not used for color, kept for API consistency
+        current_time: float,
+    ) -> Image.Image:
+        """Warm golden fireflies spiral upward from struck keys."""
+        import math
+
+        # Warm palette: gold, amber, warm white, pale yellow
+        _FIREFLY_COLORS = [
+            np.array([255, 220,  60], dtype=np.float32),  # gold
+            np.array([255, 170,  40], dtype=np.float32),  # amber
+            np.array([255, 240, 200], dtype=np.float32),  # warm white
+            np.array([230, 255, 150], dtype=np.float32),  # pale yellow
+        ]
+
+        # Spawn particles for each newly struck note
+        for midi, velocity in newly_active.items():
+            key = key_map.get(midi)
+            if key is None:
+                continue
+            cx = key.x + key.width / 2.0
+            num = np.random.randint(6, 13)
+            for _ in range(num):
+                color = _FIREFLY_COLORS[np.random.randint(0, len(_FIREFLY_COLORS))].copy()
+                size = np.random.uniform(3.0, 8.0)
+                x = cx + np.random.uniform(-key.width * 0.6, key.width * 0.6)
+                y = float(keyboard_top) - np.random.uniform(0, 4)
+                vy = -np.random.uniform(2.0, 5.0)   # upward
+                vx = np.random.uniform(-0.8, 0.8)    # slight horizontal drift
+                wobble_phase = np.random.uniform(0, 2 * math.pi)
+                wobble_amp = np.random.uniform(0.5, 1.5)
+                pulse_phase = np.random.uniform(0, 2 * math.pi)
+                lifetime = np.random.randint(30, 50)
+                self._firefly_particles.append({
+                    'x': x, 'y': y, 'vx': vx, 'vy': vy,
+                    'size': size, 'color': color,
+                    'life': 0, 'max_life': lifetime,
+                    'wobble_phase': wobble_phase,
+                    'wobble_amp': wobble_amp,
+                    'pulse_phase': pulse_phase,
+                })
+
+        if not self._firefly_particles:
+            return img
+
+        strip_height = 400
+        strip_top = max(0, keyboard_top - strip_height)
+        strip_bottom = keyboard_top
+
+        arr = np.array(img)
+        overlay = np.zeros((strip_bottom - strip_top, img.width, 3), dtype=np.float32)
+
+        alive = []
+        for p in self._firefly_particles:
+            p['life'] += 1
+            if p['life'] > p['max_life']:
+                continue
+
+            life_frac = p['life'] / p['max_life']
+
+            # Fade in (first 8 frames), hold, fade out
+            if p['life'] <= 8:
+                alpha = p['life'] / 8.0
+            else:
+                alpha = 1.0 - life_frac
+            # Pulse brightness ~2Hz (at ~30fps period ~15 frames)
+            pulse = 0.75 + 0.25 * math.sin(p['pulse_phase'] + p['life'] * 0.42)
+            alpha = float(np.clip(alpha * pulse, 0.0, 1.0))
+
+            # Advance physics with sine wobble
+            wobble = math.sin(p['wobble_phase'] + p['life'] * 0.3) * p['wobble_amp']
+            p['x'] += p['vx'] + wobble
+            p['y'] += p['vy']
+
+            px = p['x']
+            py = p['y']
+            size = p['size']
+
+            if py + size < strip_top or py - size > strip_bottom:
+                alive.append(p)
+                continue
+            if px + size < 0 or px - size > img.width:
+                alive.append(p)
+                continue
+
+            alive.append(p)
+
+            # Inner core + outer halo (2x radius, 30% opacity)
+            r_inner = int(math.ceil(size)) + 1
+            r_outer = int(math.ceil(size * 2.0)) + 1
+            local_y = py - strip_top
+
+            for (r, strength) in [(r_outer, 0.3), (r_inner, 1.0)]:
+                y0 = int(local_y) - r
+                y1 = int(local_y) + r + 1
+                x0 = int(px) - r
+                x1 = int(px) + r + 1
+                oy0 = max(0, y0)
+                oy1 = min(overlay.shape[0], y1)
+                ox0 = max(0, x0)
+                ox1 = min(overlay.shape[1], x1)
+                if oy0 >= oy1 or ox0 >= ox1:
+                    continue
+                ys = np.arange(oy0, oy1, dtype=np.float32) - local_y
+                xs = np.arange(ox0, ox1, dtype=np.float32) - px
+                dist2 = ys[:, np.newaxis] ** 2 + xs[np.newaxis, :] ** 2
+                sigma2 = (size * 0.5) ** 2
+                body = np.exp(-dist2 / (2 * max(sigma2, 0.5))) * alpha * strength
+                overlay[oy0:oy1, ox0:ox1, :] += body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
+
+        self._firefly_particles = alive
+
+        if overlay.max() > 0:
+            strip = arr[strip_top:strip_bottom].astype(np.float32)
+            arr[strip_top:strip_bottom] = np.minimum(strip + overlay, 255.0).astype(np.uint8)
+
+        return Image.fromarray(arr)
+
+    def apply_starflow(
+        self,
+        img: Image.Image,
+        active_keys: dict,      # {midi: velocity}, used to boost nearby stars
+        key_map: dict,
+        keyboard_top: int,
+        color_scheme,
+        current_time: float,
+    ) -> Image.Image:
+        """Ambient starfield that drifts across the background above the keyboard."""
+        import math
+
+        TARGET_COUNT = 100
+        w = img.width
+        h_area = max(1, keyboard_top)
+
+        _STAR_COLORS = [
+            np.array([180, 240, 255], dtype=np.float32),  # pale cyan
+            np.array([220, 220, 255], dtype=np.float32),  # silver-white
+            np.array([200, 180, 255], dtype=np.float32),  # pale violet
+            np.array([150, 200, 255], dtype=np.float32),  # ice blue
+        ]
+
+        self._star_frame += 1
+
+        # Top up star pool
+        while len(self._star_particles) < TARGET_COUNT:
+            self._star_particles.append({
+                'x': np.random.uniform(-5, w + 5),
+                'y': np.random.uniform(0, h_area),
+                'vx': np.random.uniform(0.3, 1.2),   # drift right
+                'vy': np.random.uniform(0.1, 0.4),   # slight downward
+                'size': np.random.uniform(1.0, 4.0),
+                'color': _STAR_COLORS[np.random.randint(0, len(_STAR_COLORS))].copy(),
+                'twinkle_phase': np.random.uniform(0, 2 * math.pi),
+                'twinkle_freq': np.random.uniform(0.05, 0.15),
+            })
+
+        # Active key x-centers for proximity boost
+        active_cx = []
+        for midi in active_keys:
+            key = key_map.get(midi)
+            if key is not None:
+                active_cx.append(key.x + key.width / 2.0)
+
+        strip_top = 0
+        strip_bottom = keyboard_top
+        arr = np.array(img)
+        overlay = np.zeros((strip_bottom - strip_top, w, 3), dtype=np.float32)
+
+        for p in self._star_particles:
+            boost_speed = 1.0
+            boost_bright = 1.0
+            for acx in active_cx:
+                if abs(p['x'] - acx) < 80:
+                    boost_speed = 1.3
+                    boost_bright = 1.5
+                    break
+
+            p['x'] += p['vx'] * boost_speed
+            p['y'] += p['vy'] * boost_speed
+
+            # Wrap-around edges
+            if p['x'] > w + 10:
+                p['x'] = -5.0
+                p['y'] = np.random.uniform(0, h_area)
+            elif p['x'] < -10:
+                p['x'] = float(w) + 5.0
+                p['y'] = np.random.uniform(0, h_area)
+            if p['y'] > h_area:
+                p['y'] = 0.0
+                p['x'] = np.random.uniform(0, w)
+
+            # Twinkle alpha
+            alpha = 0.4 + 0.35 * math.sin(p['twinkle_phase'] + self._star_frame * p['twinkle_freq'])
+            alpha = float(np.clip(alpha * boost_bright * 0.6, 0.0, 0.9))
+
+            px = p['x']
+            py = p['y']
+            size = p['size']
+            local_y = py  # strip_top == 0
+
+            if local_y + size < 0 or local_y - size >= strip_bottom:
+                continue
+            if px + size < 0 or px - size >= w:
+                continue
+
+            r = int(math.ceil(size)) + 1
+            y0 = int(local_y) - r
+            y1 = int(local_y) + r + 1
+            x0 = int(px) - r
+            x1 = int(px) + r + 1
+            oy0 = max(0, y0)
+            oy1 = min(overlay.shape[0], y1)
+            ox0 = max(0, x0)
+            ox1 = min(overlay.shape[1], x1)
+            if oy0 >= oy1 or ox0 >= ox1:
+                continue
+
+            ys = np.arange(oy0, oy1, dtype=np.float32) - local_y
+            xs = np.arange(ox0, ox1, dtype=np.float32) - px
+            dist2 = ys[:, np.newaxis] ** 2 + xs[np.newaxis, :] ** 2
+            sigma2 = max((size * 0.5) ** 2, 0.5)
+            body = np.exp(-dist2 / (2 * sigma2)) * alpha
+            overlay[oy0:oy1, ox0:ox1, :] += body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
+
+        if overlay.max() > 0:
+            strip = arr[strip_top:strip_bottom].astype(np.float32)
+            arr[strip_top:strip_bottom] = np.minimum(strip + overlay, 255.0).astype(np.uint8)
+
         return Image.fromarray(arr)

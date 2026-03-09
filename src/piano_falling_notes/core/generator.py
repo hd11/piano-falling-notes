@@ -122,6 +122,19 @@ class VideoGenerator:
                     layout.keyboard_top, color_scheme, current_time,
                 )
 
+                # Firefly ascent on note strike
+                if newly_active:
+                    frame = effects.apply_firefly_ascent(
+                        frame, newly_active, keyboard.keys,
+                        layout.keyboard_top, color_scheme, current_time,
+                    )
+
+                # Ambient starflow (every frame)
+                frame = effects.apply_starflow(
+                    frame, active, keyboard.keys,
+                    layout.keyboard_top, color_scheme, current_time,
+                )
+
                 # Keyboard-top glow for active notes
                 frame = effects.apply_note_glow(
                     frame, active, keyboard.keys,
