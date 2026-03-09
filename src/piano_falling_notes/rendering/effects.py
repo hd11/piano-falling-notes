@@ -548,7 +548,7 @@ class VisualEffects:
         arr[strip_top:strip_bottom] = strip
         return Image.fromarray(arr)
 
-    def apply_firefly_ascent(
+    def apply_c_note_rise(
         self,
         img: Image.Image,
         newly_active: dict,   # {midi: velocity} of newly struck notes
@@ -557,55 +557,53 @@ class VisualEffects:
         color_scheme,
         current_time: float,
     ) -> Image.Image:
-        """One firefly per note orbits the note's x-center while rising upward."""
+        """When a C (도) note is struck, spawn star particles that rise along
+        the C guide line from keyboard top to screen top.
+        """
         import math
 
-        # Spawn ONE firefly per newly struck note
-        _COLORS = [
-            np.array([255, 230,  80], dtype=np.float32),  # gold
-            np.array([255, 180,  50], dtype=np.float32),  # amber
-            np.array([255, 250, 180], dtype=np.float32),  # warm white
-        ]
+        # Spawn particles for each newly struck C note (midi % 12 == 0)
         for midi, velocity in newly_active.items():
+            if midi % 12 != 0:
+                continue
             key = key_map.get(midi)
             if key is None:
                 continue
-            cx = key.x + key.width / 2.0
-            # Large orbit radius so firefly is clearly visible (~80-120px)
-            orbit_r = np.random.uniform(80.0, 120.0)
-            start_angle = np.random.uniform(0, 2 * math.pi)
-            spin_dir = float(np.random.choice([-1, 1]))
-            # Slow graceful spin: ~0.10-0.15 rad/frame → 1 orbit in 42-63 frames (~1.5-2s)
-            spin_speed = np.random.uniform(0.10, 0.15) * spin_dir
-            # Moderate rise so it stays visible for full lifetime
-            rise_speed = np.random.uniform(2.0, 3.5)
-            color = _COLORS[np.random.randint(0, len(_COLORS))].copy()
-            # Large prominent size: 14-20px
-            size = np.random.uniform(14.0, 20.0)
-            lifetime = np.random.randint(90, 130)
-            self._firefly_particles.append({
-                'cx': cx,
-                'cy': float(keyboard_top),
-                'orbit_r': orbit_r,
-                'angle': start_angle,
-                'spin_speed': spin_speed,
-                'rise_speed': rise_speed,
-                'size': size,
-                'color': color,
-                'life': 0,
-                'max_life': lifetime,
-                'pulse_phase': np.random.uniform(0, 2 * math.pi),
-            })
+            # Guide line x = left edge of the key
+            gx = float(int(key.x))
+            # Spawn a burst of particles along the guide line at keyboard_top
+            num = np.random.randint(18, 28)
+            for _ in range(num):
+                # Random spread around the guide line (±8px)
+                x = gx + np.random.uniform(-8.0, 8.0)
+                # Stagger start height slightly below keyboard
+                y = float(keyboard_top) + np.random.uniform(0, 6)
+                # Fast upward rise — reaches screen top in ~40-70 frames
+                vy = -np.random.uniform(10.0, 18.0)
+                # Tiny horizontal drift
+                vx = np.random.uniform(-0.6, 0.6)
+                # Sparkle colors: white-gold to warm white
+                t = np.random.random()
+                color = np.array([
+                    255,
+                    int(200 + 55 * t),
+                    int(80 + 120 * t),
+                ], dtype=np.float32)
+                size = np.random.uniform(2.5, 6.0)
+                lifetime = np.random.randint(35, 65)
+                self._firefly_particles.append({
+                    'x': x, 'y': y, 'vx': vx, 'vy': vy,
+                    'size': size, 'color': color,
+                    'life': 0, 'max_life': lifetime,
+                    'pulse_phase': np.random.uniform(0, 2 * math.pi),
+                    'guide_x': gx,  # anchor for slight wobble toward guide line
+                })
 
         if not self._firefly_particles:
             return img
 
-        strip_height = 500
-        strip_top = max(0, keyboard_top - strip_height)
-        strip_bottom = keyboard_top
-
         arr = np.array(img)
-        overlay = np.zeros((strip_bottom - strip_top, img.width, 3), dtype=np.float32)
+        overlay = np.zeros((keyboard_top, img.width, 3), dtype=np.float32)
 
         alive = []
         for p in self._firefly_particles:
@@ -615,29 +613,27 @@ class VisualEffects:
 
             life_frac = p['life'] / p['max_life']
 
-            # Fade in first 10 frames, fade out last 20 frames
-            if p['life'] <= 10:
-                alpha = p['life'] / 10.0
-            elif life_frac > 0.75:
-                alpha = (1.0 - life_frac) / 0.25
+            # Fade in first 5 frames, fade out last 30%
+            if p['life'] <= 5:
+                alpha = p['life'] / 5.0
+            elif life_frac > 0.70:
+                alpha = (1.0 - life_frac) / 0.30
             else:
                 alpha = 1.0
-            # Soft pulse ~2Hz
-            pulse = 0.72 + 0.28 * math.sin(p['pulse_phase'] + p['life'] * 0.40)
+            # Sparkle pulse
+            pulse = 0.65 + 0.35 * math.sin(p['pulse_phase'] + p['life'] * 0.55)
             alpha = float(np.clip(alpha * pulse, 0.0, 1.0))
 
-            # Advance orbit: rotate angle, raise center
-            p['angle'] += p['spin_speed']
-            p['cy'] -= p['rise_speed']
+            # Move upward; slight pull back toward guide line
+            drift_x = (p['guide_x'] - p['x']) * 0.04
+            p['x'] += p['vx'] + drift_x
+            p['y'] += p['vy']
 
-            # Firefly world position — circular orbit (not flattened)
-            px = p['cx'] + p['orbit_r'] * math.cos(p['angle'])
-            py = p['cy'] + p['orbit_r'] * math.sin(p['angle'])
-
+            px = p['x']
+            py = p['y']
             size = p['size']
 
-            # Skip if outside visible strip
-            if py - size >= strip_bottom or py + size < strip_top:
+            if py + size < 0 or py - size >= keyboard_top:
                 alive.append(p)
                 continue
             if px + size < 0 or px - size >= img.width:
@@ -646,10 +642,10 @@ class VisualEffects:
 
             alive.append(p)
 
-            local_y = py - strip_top
+            local_y = py  # strip_top == 0
 
-            # Draw: outer halo (3x, 20%) + mid glow (1.5x, 50%) + bright core (1x, 100%)
-            for (scale, strength) in [(3.0, 0.20), (1.5, 0.55), (1.0, 1.0)]:
+            # Inner bright core + outer glow
+            for (scale, strength) in [(2.5, 0.25), (1.0, 1.0)]:
                 r = int(math.ceil(size * scale)) + 1
                 y0 = int(local_y) - r
                 y1 = int(local_y) + r + 1
@@ -664,15 +660,15 @@ class VisualEffects:
                 ys = np.arange(oy0, oy1, dtype=np.float32) - local_y
                 xs = np.arange(ox0, ox1, dtype=np.float32) - px
                 dist2 = ys[:, np.newaxis] ** 2 + xs[np.newaxis, :] ** 2
-                sigma2 = max((size * scale * 0.45) ** 2, 0.5)
+                sigma2 = max((size * scale * 0.5) ** 2, 0.5)
                 body = np.exp(-dist2 / (2 * sigma2)) * alpha * strength
                 overlay[oy0:oy1, ox0:ox1, :] += body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
 
         self._firefly_particles = alive
 
         if overlay.max() > 0:
-            strip = arr[strip_top:strip_bottom].astype(np.float32)
-            arr[strip_top:strip_bottom] = np.minimum(strip + overlay, 255.0).astype(np.uint8)
+            strip = arr[:keyboard_top].astype(np.float32)
+            arr[:keyboard_top] = np.minimum(strip + overlay, 255.0).astype(np.uint8)
 
         return Image.fromarray(arr)
 

@@ -122,9 +122,9 @@ class VideoGenerator:
                     layout.keyboard_top, color_scheme, current_time,
                 )
 
-                # Firefly ascent on note strike
+                # C note guide-line rise effect
                 if newly_active:
-                    frame = effects.apply_firefly_ascent(
+                    frame = effects.apply_c_note_rise(
                         frame, newly_active, keyboard.keys,
                         layout.keyboard_top, color_scheme, current_time,
                     )
