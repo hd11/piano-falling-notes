@@ -120,7 +120,7 @@ class VideoGenerator:
                 current_time = frame_idx / layout.fps - lead_in
 
                 # Energy-based color update (new notes get new color; existing notes keep cached color)
-                if current_time >= 0:
+                if config.energy_color and current_time >= 0:
                     _e = _energy.get(int(current_time), 0.5)
                     if _e < 0.60:                          # blue  (0 ~ 0.60 — 60%)
                         _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
@@ -166,16 +166,18 @@ class VideoGenerator:
                 )
 
                 # Ambient starflow (every frame)
-                frame = effects.apply_starflow(
-                    frame, active, keyboard.keys,
-                    layout.keyboard_top, color_scheme, current_time,
-                )
+                if config.starflow:
+                    frame = effects.apply_starflow(
+                        frame, active, keyboard.keys,
+                        layout.keyboard_top, color_scheme, current_time,
+                    )
 
-                # C note guide-line rise effect — always called so rising dots render every frame
-                frame = effects.apply_c_note_rise(
-                    frame, newly_active, active, keyboard.keys,
-                    layout.keyboard_top, color_scheme, current_time,
-                )
+                # Comet effect — always called so rising dots render every frame
+                if config.comet_effect:
+                    frame = effects.apply_c_note_rise(
+                        frame, newly_active, active, keyboard.keys,
+                        layout.keyboard_top, color_scheme, current_time,
+                    )
 
                 # Keyboard-top glow for active notes
                 frame = effects.apply_note_glow(

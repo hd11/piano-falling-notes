@@ -572,6 +572,39 @@
         </label>
       </div>
 
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">혜성 이펙트</span>
+          <span class="label-sub">별 모양 혜성이 화면을 가로질러 올라감</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="comet_effect" name="comet_effect" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">에너지 색 전환</span>
+          <span class="label-sub">음악 강도에 따라 노트 색상이 변함</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="energy_color" name="energy_color" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">별빛흐름</span>
+          <span class="label-sub">배경에 흐르는 별빛 파티클 효과</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="starflow" name="starflow" checked />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
     </div>
   </div>
 
@@ -732,8 +765,11 @@
     }
     fd.append('resolution',  document.getElementById('resolution').value);
     fd.append('fps',         document.getElementById('fps').value);
-    fd.append('glow',        document.getElementById('glow').checked  ? 'on' : 'off');
-    fd.append('audio',       document.getElementById('audio').checked ? 'on' : 'off');
+    fd.append('glow',         document.getElementById('glow').checked         ? 'on' : 'off');
+    fd.append('audio',        document.getElementById('audio').checked        ? 'on' : 'off');
+    fd.append('comet_effect', document.getElementById('comet_effect').checked ? 'on' : 'off');
+    fd.append('energy_color', document.getElementById('energy_color').checked ? 'on' : 'off');
+    fd.append('starflow',     document.getElementById('starflow').checked      ? 'on' : 'off');
 
     try {
       const res = await fetch('/convert', { method: 'POST', body: fd });
@@ -767,8 +803,11 @@
     if (document.getElementById('custom_bg_enabled').checked) {
       fd.append('custom_bg', document.getElementById('custom_bg').value);
     }
-    fd.append('guide_lines', document.getElementById('guide_lines').checked ? 'on' : 'off');
-    fd.append('glitter',     document.getElementById('glitter').checked ? 'on' : 'off');
+    fd.append('guide_lines',  document.getElementById('guide_lines').checked  ? 'on' : 'off');
+    fd.append('glitter',      document.getElementById('glitter').checked      ? 'on' : 'off');
+    fd.append('comet_effect', document.getElementById('comet_effect').checked ? 'on' : 'off');
+    fd.append('energy_color', document.getElementById('energy_color').checked ? 'on' : 'off');
+    fd.append('starflow',     document.getElementById('starflow').checked      ? 'on' : 'off');
 
     try {
       const res = await fetch('/preview', { method: 'POST', body: fd });

@@ -45,6 +45,9 @@ class Config:
     note_style: str = "standard"  # "standard" or "djeq" (DJ EQ Max visualization)
     note_duration_ratio: float = 0.92  # visual shortening ratio for note separation
     glitter: bool = False  # twinkling glitter on note bars
+    comet_effect: bool = True  # comet/shooting-star effect
+    energy_color: bool = True  # energy-based dynamic note color
+    starflow: bool = True  # ambient starflow background effect
 
     # Timing
     lead_in_seconds: float = 2.0

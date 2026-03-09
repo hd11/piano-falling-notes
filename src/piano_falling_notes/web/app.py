@@ -170,11 +170,13 @@ def run_conversion(job_id, input_path, config):
                 if config.neon_burst and newly_active:
                     frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
 
-                # C note guide-line rise effect — always called so rising dots render every frame
-                frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
+                # C note guide-line rise effect (comet effect)
+                if config.comet_effect:
+                    frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
                 # Ambient starflow (every frame)
-                frame = effects.apply_starflow(frame, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
+                if config.starflow:
+                    frame = effects.apply_starflow(frame, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
                 if config.glow_enabled and active:
                     frame = effects.apply_note_glow(
@@ -314,6 +316,15 @@ def convert():
     audio = request.form.get('audio', 'on')
     config.no_audio = (audio != 'on')
 
+    comet_effect = request.form.get('comet_effect', 'on')
+    config.comet_effect = (comet_effect == 'on')
+
+    energy_color = request.form.get('energy_color', 'on')
+    config.energy_color = (energy_color == 'on')
+
+    starflow = request.form.get('starflow', 'on')
+    config.starflow = (starflow == 'on')
+
     stem = Path(f.filename).stem
     config.output_path = str(Path(app.config['OUTPUT_FOLDER']) / f'{stem}_{job_id}.mp4')
 
@@ -410,6 +421,15 @@ def preview():
         guide_lines = request.form.get('guide_lines', 'on')
         config.guide_lines = (guide_lines == 'on')
 
+        comet_effect = request.form.get('comet_effect', 'on')
+        config.comet_effect = (comet_effect == 'on')
+
+        energy_color = request.form.get('energy_color', 'on')
+        config.energy_color = (energy_color == 'on')
+
+        starflow_opt = request.form.get('starflow', 'on')
+        config.starflow = (starflow_opt == 'on')
+
         # Parse and build
         notes, metadata = parse_musicxml(input_path)
         timeline = build_timeline(notes, metadata)
@@ -454,6 +474,46 @@ def preview():
                 break
 
         current_time = t_try
+
+        # Energy-based color for preview frame
+        if config.energy_color:
+            _ENERGY_WINDOW = 4.0
+            _raw_energy = {}
+            for _t in range(int(timeline.total_duration) + 2):
+                _wn = [n for n in timeline.notes if _t <= n.start_seconds < _t + _ENERGY_WINDOW]
+                if _wn:
+                    _density = len(_wn) / _ENERGY_WINDOW
+                    _avg_vel = sum(n.velocity for n in _wn) / len(_wn)
+                    _raw_energy[_t] = _density * 0.5 + _avg_vel * 0.5
+                else:
+                    _raw_energy[_t] = 0.0
+            _smoothed = {_t: sum(_raw_energy.get(_t + d, 0) for d in range(-2, 3)) / 5
+                         for _t in _raw_energy}
+            _e_min = min(_smoothed.values()) if _smoothed else 0.0
+            _e_max = max(_smoothed.values()) if _smoothed else 1.0
+            _e_range = max(_e_max - _e_min, 0.01)
+            _energy = {_t: (_v - _e_min) / _e_range for _t, _v in _smoothed.items()}
+
+            _PAL_LOW  = ((80, 130, 255), (160, 80, 255))
+            _PAL_MID  = ((0, 255, 128), (0, 140, 255))
+            _PAL_HIGH = ((255, 160, 0), (255, 60, 40))
+
+            def _lerp_color(c1, c2, t):
+                t = max(0.0, min(1.0, t))
+                return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
+
+            _e = _energy.get(int(current_time), 0.5)
+            if _e < 0.60:
+                _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
+                _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / 0.60)
+            elif _e < 0.90:
+                _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - 0.60) / 0.30)
+                _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
+            else:
+                _wc, _bc = _PAL_HIGH
+            color_scheme.white_key_note_color = _wc
+            color_scheme.black_key_note_color = _bc
+
         frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
         frame = falling.render(frame, visible, current_time)
 
@@ -466,13 +526,15 @@ def preview():
         frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys,
                                                 layout.keyboard_top, color_scheme, current_time)
 
-        # C note guide-line rise
-        frame = effects.apply_c_note_rise(frame, active, active, keyboard.keys,
-                                          layout.keyboard_top, color_scheme, current_time)
+        # C note guide-line rise (comet effect)
+        if config.comet_effect:
+            frame = effects.apply_c_note_rise(frame, active, active, keyboard.keys,
+                                              layout.keyboard_top, color_scheme, current_time)
 
         # Ambient starflow
-        frame = effects.apply_starflow(frame, active, keyboard.keys,
-                                       layout.keyboard_top, color_scheme, current_time)
+        if config.starflow:
+            frame = effects.apply_starflow(frame, active, keyboard.keys,
+                                           layout.keyboard_top, color_scheme, current_time)
 
         # Glow
         frame = effects.apply_note_glow(frame, active, keyboard.keys,
