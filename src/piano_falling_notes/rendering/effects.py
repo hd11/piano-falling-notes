@@ -554,51 +554,54 @@ class VisualEffects:
         newly_active: dict,   # {midi: velocity} of newly struck notes
         key_map: dict,
         keyboard_top: int,
-        color_scheme,          # not used for color, kept for API consistency
+        color_scheme,
         current_time: float,
     ) -> Image.Image:
-        """Warm golden fireflies spiral upward from struck keys."""
+        """One firefly per note orbits the note's x-center while rising upward."""
         import math
 
-        # Warm palette: gold, amber, warm white, pale yellow
-        _FIREFLY_COLORS = [
-            np.array([255, 220,  60], dtype=np.float32),  # gold
-            np.array([255, 170,  40], dtype=np.float32),  # amber
-            np.array([255, 240, 200], dtype=np.float32),  # warm white
-            np.array([230, 255, 150], dtype=np.float32),  # pale yellow
-        ]
-
-        # Spawn particles for each newly struck note
+        # Spawn ONE firefly per newly struck note
         for midi, velocity in newly_active.items():
             key = key_map.get(midi)
             if key is None:
                 continue
             cx = key.x + key.width / 2.0
-            num = np.random.randint(6, 13)
-            for _ in range(num):
-                color = _FIREFLY_COLORS[np.random.randint(0, len(_FIREFLY_COLORS))].copy()
-                size = np.random.uniform(3.0, 8.0)
-                x = cx + np.random.uniform(-key.width * 0.6, key.width * 0.6)
-                y = float(keyboard_top) - np.random.uniform(0, 4)
-                vy = -np.random.uniform(2.0, 5.0)   # upward
-                vx = np.random.uniform(-0.8, 0.8)    # slight horizontal drift
-                wobble_phase = np.random.uniform(0, 2 * math.pi)
-                wobble_amp = np.random.uniform(0.5, 1.5)
-                pulse_phase = np.random.uniform(0, 2 * math.pi)
-                lifetime = np.random.randint(30, 50)
-                self._firefly_particles.append({
-                    'x': x, 'y': y, 'vx': vx, 'vy': vy,
-                    'size': size, 'color': color,
-                    'life': 0, 'max_life': lifetime,
-                    'wobble_phase': wobble_phase,
-                    'wobble_amp': wobble_amp,
-                    'pulse_phase': pulse_phase,
-                })
+            # Orbit radius scales with key width
+            orbit_r = max(key.width * 0.9, 14.0)
+            # Random starting angle and spin direction
+            start_angle = np.random.uniform(0, 2 * math.pi)
+            spin_dir = np.random.choice([-1, 1])
+            # Spin speed (radians/frame): 0.18~0.28 rad → ~1 orbit per 22-35 frames
+            spin_speed = np.random.uniform(0.18, 0.28) * spin_dir
+            # Rise speed (px/frame upward)
+            rise_speed = np.random.uniform(1.8, 3.2)
+            # Gold/amber glow color
+            _COLORS = [
+                np.array([255, 230,  80], dtype=np.float32),  # gold
+                np.array([255, 180,  50], dtype=np.float32),  # amber
+                np.array([255, 250, 180], dtype=np.float32),  # warm white
+            ]
+            color = _COLORS[np.random.randint(0, len(_COLORS))].copy()
+            size = np.random.uniform(4.0, 7.0)
+            lifetime = np.random.randint(55, 85)
+            self._firefly_particles.append({
+                'cx': cx,                    # orbit center x (fixed horizontally)
+                'cy': float(keyboard_top),   # orbit center y (rises each frame)
+                'orbit_r': orbit_r,
+                'angle': start_angle,
+                'spin_speed': spin_speed,
+                'rise_speed': rise_speed,
+                'size': size,
+                'color': color,
+                'life': 0,
+                'max_life': lifetime,
+                'pulse_phase': np.random.uniform(0, 2 * math.pi),
+            })
 
         if not self._firefly_particles:
             return img
 
-        strip_height = 400
+        strip_height = 500
         strip_top = max(0, keyboard_top - strip_height)
         strip_bottom = keyboard_top
 
@@ -613,39 +616,42 @@ class VisualEffects:
 
             life_frac = p['life'] / p['max_life']
 
-            # Fade in (first 8 frames), hold, fade out
-            if p['life'] <= 8:
-                alpha = p['life'] / 8.0
+            # Fade in first 10 frames, fade out last 20 frames
+            if p['life'] <= 10:
+                alpha = p['life'] / 10.0
+            elif life_frac > 0.75:
+                alpha = (1.0 - life_frac) / 0.25
             else:
-                alpha = 1.0 - life_frac
-            # Pulse brightness ~2Hz (at ~30fps period ~15 frames)
-            pulse = 0.75 + 0.25 * math.sin(p['pulse_phase'] + p['life'] * 0.42)
+                alpha = 1.0
+            # Soft pulse ~2Hz
+            pulse = 0.72 + 0.28 * math.sin(p['pulse_phase'] + p['life'] * 0.40)
             alpha = float(np.clip(alpha * pulse, 0.0, 1.0))
 
-            # Advance physics with sine wobble
-            wobble = math.sin(p['wobble_phase'] + p['life'] * 0.3) * p['wobble_amp']
-            p['x'] += p['vx'] + wobble
-            p['y'] += p['vy']
+            # Advance orbit: rotate angle, raise center
+            p['angle'] += p['spin_speed']
+            p['cy'] -= p['rise_speed']
 
-            px = p['x']
-            py = p['y']
+            # Firefly world position
+            px = p['cx'] + p['orbit_r'] * math.cos(p['angle'])
+            py = p['cy'] + p['orbit_r'] * math.sin(p['angle']) * 0.45  # flattened ellipse
+
             size = p['size']
 
-            if py + size < strip_top or py - size > strip_bottom:
+            # Skip if outside visible strip
+            if py - size >= strip_bottom or py + size < strip_top:
                 alive.append(p)
                 continue
-            if px + size < 0 or px - size > img.width:
+            if px + size < 0 or px - size >= img.width:
                 alive.append(p)
                 continue
 
             alive.append(p)
 
-            # Inner core + outer halo (2x radius, 30% opacity)
-            r_inner = int(math.ceil(size)) + 1
-            r_outer = int(math.ceil(size * 2.0)) + 1
             local_y = py - strip_top
 
-            for (r, strength) in [(r_outer, 0.3), (r_inner, 1.0)]:
+            # Draw: outer halo (3x, 20%) + mid glow (1.5x, 50%) + bright core (1x, 100%)
+            for (scale, strength) in [(3.0, 0.20), (1.5, 0.55), (1.0, 1.0)]:
+                r = int(math.ceil(size * scale)) + 1
                 y0 = int(local_y) - r
                 y1 = int(local_y) + r + 1
                 x0 = int(px) - r
@@ -659,8 +665,8 @@ class VisualEffects:
                 ys = np.arange(oy0, oy1, dtype=np.float32) - local_y
                 xs = np.arange(ox0, ox1, dtype=np.float32) - px
                 dist2 = ys[:, np.newaxis] ** 2 + xs[np.newaxis, :] ** 2
-                sigma2 = (size * 0.5) ** 2
-                body = np.exp(-dist2 / (2 * max(sigma2, 0.5))) * alpha * strength
+                sigma2 = max((size * scale * 0.45) ** 2, 0.5)
+                body = np.exp(-dist2 / (2 * sigma2)) * alpha * strength
                 overlay[oy0:oy1, ox0:ox1, :] += body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
 
         self._firefly_particles = alive
@@ -683,7 +689,7 @@ class VisualEffects:
         """Ambient starfield that drifts across the background above the keyboard."""
         import math
 
-        TARGET_COUNT = 100
+        TARGET_COUNT = 300
         w = img.width
         h_area = max(1, keyboard_top)
 
@@ -692,6 +698,10 @@ class VisualEffects:
             np.array([220, 220, 255], dtype=np.float32),  # silver-white
             np.array([200, 180, 255], dtype=np.float32),  # pale violet
             np.array([150, 200, 255], dtype=np.float32),  # ice blue
+            np.array([255, 220, 255], dtype=np.float32),  # pink-white
+            np.array([200, 255, 240], dtype=np.float32),  # mint
+            np.array([255, 255, 200], dtype=np.float32),  # warm white
+            np.array([180, 180, 255], dtype=np.float32),  # lavender
         ]
 
         self._star_frame += 1
@@ -701,12 +711,12 @@ class VisualEffects:
             self._star_particles.append({
                 'x': np.random.uniform(-5, w + 5),
                 'y': np.random.uniform(0, h_area),
-                'vx': np.random.uniform(0.3, 1.2),   # drift right
-                'vy': np.random.uniform(0.1, 0.4),   # slight downward
-                'size': np.random.uniform(1.0, 4.0),
+                'vx': np.random.uniform(0.2, 1.8),   # drift right (some fast)
+                'vy': np.random.uniform(-0.3, 0.5),  # slight up or down
+                'size': np.random.uniform(1.0, 5.5),  # bigger max
                 'color': _STAR_COLORS[np.random.randint(0, len(_STAR_COLORS))].copy(),
                 'twinkle_phase': np.random.uniform(0, 2 * math.pi),
-                'twinkle_freq': np.random.uniform(0.05, 0.15),
+                'twinkle_freq': np.random.uniform(0.06, 0.22),
             })
 
         # Active key x-centers for proximity boost
@@ -744,9 +754,9 @@ class VisualEffects:
                 p['y'] = 0.0
                 p['x'] = np.random.uniform(0, w)
 
-            # Twinkle alpha
-            alpha = 0.4 + 0.35 * math.sin(p['twinkle_phase'] + self._star_frame * p['twinkle_freq'])
-            alpha = float(np.clip(alpha * boost_bright * 0.6, 0.0, 0.9))
+            # Twinkle alpha — brighter range
+            alpha = 0.5 + 0.45 * math.sin(p['twinkle_phase'] + self._star_frame * p['twinkle_freq'])
+            alpha = float(np.clip(alpha * boost_bright * 0.85, 0.0, 1.0))
 
             px = p['x']
             py = p['y']
