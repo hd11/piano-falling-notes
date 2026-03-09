@@ -170,9 +170,8 @@ def run_conversion(job_id, input_path, config):
                 if config.neon_burst and newly_active:
                     frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
 
-                # C note guide-line rise effect
-                if newly_active:
-                    frame = effects.apply_c_note_rise(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
+                # C note guide-line rise effect — always called so rising dots render every frame
+                frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
                 # Ambient starflow (every frame)
                 frame = effects.apply_starflow(frame, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
@@ -467,10 +466,9 @@ def preview():
         frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys,
                                                 layout.keyboard_top, color_scheme, current_time)
 
-        # C note guide-line rise (use active as newly_active for preview snapshot)
-        if active:
-            frame = effects.apply_c_note_rise(frame, active, keyboard.keys,
-                                              layout.keyboard_top, color_scheme, current_time)
+        # C note guide-line rise
+        frame = effects.apply_c_note_rise(frame, active, active, keyboard.keys,
+                                          layout.keyboard_top, color_scheme, current_time)
 
         # Ambient starflow
         frame = effects.apply_starflow(frame, active, keyboard.keys,

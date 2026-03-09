@@ -27,6 +27,7 @@ class FallingNotesRenderer:
         self.note_duration_ratio = note_duration_ratio
         self.guide_lines = guide_lines
         self.glitter = glitter
+        self._note_color_cache = {}  # {(midi, start_seconds): color_rgb} — fixed on first render
 
     def render_guide_lines(self, img: Image.Image) -> None:
         """Draw faint vertical lines at C and F note boundaries."""
@@ -76,8 +77,11 @@ class FallingNotesRenderer:
             if x1 <= x0:
                 continue
 
-            color_rgba = self.colors.note_color(note.midi_number, note.velocity, note.part_index)
-            color_rgb = color_rgba[:3]
+            cache_key = (note.midi_number, note.start_seconds)
+            if cache_key not in self._note_color_cache:
+                color_rgba = self.colors.note_color(note.midi_number, note.velocity, note.part_index)
+                self._note_color_cache[cache_key] = color_rgba[:3]
+            color_rgb = self._note_color_cache[cache_key]
 
             # Pillow's rounded_rectangle requires integer coords
             rect = [
