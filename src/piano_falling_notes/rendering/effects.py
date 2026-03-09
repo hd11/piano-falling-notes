@@ -557,96 +557,80 @@ class VisualEffects:
         color_scheme,
         current_time: float,
     ) -> Image.Image:
-        """When a C (도) note is struck, spawn star particles that rise along
-        the C guide line from keyboard top to screen top.
+        """When a C (도) note is struck, spawn ONE glowing dot that rises from
+        keyboard_top to y=0 (screen top) at constant speed, no wobble/pulse.
         """
         import math
 
-        # Spawn particles for each newly struck C note (midi % 12 == 0)
+        _DOT_COLORS = [
+            np.array([220, 240, 255], dtype=np.float32),  # ice white
+            np.array([255, 255, 255], dtype=np.float32),  # pure white
+        ]
+
+        # Spawn ONE dot per newly struck C note (midi % 12 == 0)
         for midi, velocity in newly_active.items():
             if midi % 12 != 0:
                 continue
             key = key_map.get(midi)
             if key is None:
                 continue
-            # Guide line x = left edge of the key
-            gx = float(int(key.x))
-            # Spawn a burst of particles along the guide line at keyboard_top
-            num = np.random.randint(18, 28)
-            for _ in range(num):
-                # Random spread around the guide line (±8px)
-                x = gx + np.random.uniform(-8.0, 8.0)
-                # Stagger start height slightly below keyboard
-                y = float(keyboard_top) + np.random.uniform(0, 6)
-                # Fast upward rise — reaches screen top in ~40-70 frames
-                vy = -np.random.uniform(10.0, 18.0)
-                # Tiny horizontal drift
-                vx = np.random.uniform(-0.6, 0.6)
-                # Sparkle colors: white-gold to warm white
-                t = np.random.random()
-                color = np.array([
-                    255,
-                    int(200 + 55 * t),
-                    int(80 + 120 * t),
-                ], dtype=np.float32)
-                size = np.random.uniform(2.5, 6.0)
-                lifetime = np.random.randint(35, 65)
-                self._firefly_particles.append({
-                    'x': x, 'y': y, 'vx': vx, 'vy': vy,
-                    'size': size, 'color': color,
-                    'life': 0, 'max_life': lifetime,
-                    'pulse_phase': np.random.uniform(0, 2 * math.pi),
-                    'guide_x': gx,  # anchor for slight wobble toward guide line
-                })
+            cx = float(key.x + key.width / 2.0)
+            rise_speed = np.random.uniform(14.0, 20.0)
+            size = np.random.uniform(4.0, 8.0)
+            color = _DOT_COLORS[np.random.randint(0, 2)].copy()
+            self._firefly_particles.append({
+                'x': cx,
+                'y': float(keyboard_top),
+                'rise_speed': rise_speed,
+                'size': size,
+                'color': color,
+                'life': 0,      # frame counter for fade-in
+                'done': False,
+            })
 
         if not self._firefly_particles:
             return img
 
         arr = np.array(img)
+        # Render on the full strip from y=0 to keyboard_top
         overlay = np.zeros((keyboard_top, img.width, 3), dtype=np.float32)
 
         alive = []
         for p in self._firefly_particles:
-            p['life'] += 1
-            if p['life'] > p['max_life']:
+            if p['done']:
                 continue
 
-            life_frac = p['life'] / p['max_life']
-
-            # Fade in first 5 frames, fade out last 30%
-            if p['life'] <= 5:
-                alpha = p['life'] / 5.0
-            elif life_frac > 0.70:
-                alpha = (1.0 - life_frac) / 0.30
-            else:
-                alpha = 1.0
-            # Sparkle pulse
-            pulse = 0.65 + 0.35 * math.sin(p['pulse_phase'] + p['life'] * 0.55)
-            alpha = float(np.clip(alpha * pulse, 0.0, 1.0))
-
-            # Move upward; slight pull back toward guide line
-            drift_x = (p['guide_x'] - p['x']) * 0.04
-            p['x'] += p['vx'] + drift_x
-            p['y'] += p['vy']
+            p['life'] += 1
+            p['y'] -= p['rise_speed']
 
             px = p['x']
             py = p['y']
             size = p['size']
 
-            if py + size < 0 or py - size >= keyboard_top:
-                alive.append(p)
+            # Remove when fully off screen
+            if py + size < 0:
+                p['done'] = True
                 continue
-            if px + size < 0 or px - size >= img.width:
-                alive.append(p)
-                continue
+
+            # Alpha: fade in over first 8 frames, constant 1.0, fade out in last 20px
+            if p['life'] <= 8:
+                alpha = p['life'] / 8.0
+            elif py <= 20.0:
+                alpha = max(0.0, py / 20.0)
+            else:
+                alpha = 1.0
 
             alive.append(p)
 
             local_y = py  # strip_top == 0
 
-            # Inner bright core + outer glow
-            for (scale, strength) in [(2.5, 0.25), (1.0, 1.0)]:
-                r = int(math.ceil(size * scale)) + 1
+            # Inner core: sigma = size * 0.4
+            sigma_core = max(size * 0.4, 0.5)
+            # Outer halo: sigma = size * 1.2, alpha * 0.3
+            sigma_halo = max(size * 1.2, 1.0)
+
+            for sigma, strength in [(sigma_halo, 0.3), (sigma_core, 1.0)]:
+                r = int(math.ceil(sigma * 3.0)) + 1
                 y0 = int(local_y) - r
                 y1 = int(local_y) + r + 1
                 x0 = int(px) - r
@@ -660,9 +644,10 @@ class VisualEffects:
                 ys = np.arange(oy0, oy1, dtype=np.float32) - local_y
                 xs = np.arange(ox0, ox1, dtype=np.float32) - px
                 dist2 = ys[:, np.newaxis] ** 2 + xs[np.newaxis, :] ** 2
-                sigma2 = max((size * scale * 0.5) ** 2, 0.5)
-                body = np.exp(-dist2 / (2 * sigma2)) * alpha * strength
-                overlay[oy0:oy1, ox0:ox1, :] += body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
+                body = np.exp(-dist2 / (2 * sigma ** 2)) * alpha * strength
+                overlay[oy0:oy1, ox0:ox1, :] += (
+                    body[:, :, np.newaxis] * p['color'][np.newaxis, np.newaxis, :]
+                )
 
         self._firefly_particles = alive
 
