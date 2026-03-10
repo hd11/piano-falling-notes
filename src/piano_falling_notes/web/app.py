@@ -238,10 +238,53 @@ def run_conversion(job_id, input_path, config):
         else:
             video_only_path = output_path
 
+        # Pre-compute energy profile for energy-based color (matching CLI generator)
+        _energy = {}
+        if config.energy_color:
+            _ENERGY_WINDOW = 4.0
+            _raw_energy = {}
+            for _t in range(int(timeline.total_duration) + 2):
+                _wn = [n for n in timeline.notes if _t <= n.start_seconds < _t + _ENERGY_WINDOW]
+                if _wn:
+                    _density = len(_wn) / _ENERGY_WINDOW
+                    _avg_vel = sum(n.velocity for n in _wn) / len(_wn)
+                    _raw_energy[_t] = _density * 0.5 + _avg_vel * 0.5
+                else:
+                    _raw_energy[_t] = 0.0
+            _smoothed = {_t: sum(_raw_energy.get(_t + d, 0) for d in range(-2, 3)) / 5
+                         for _t in _raw_energy}
+            _e_min = min(_smoothed.values()) if _smoothed else 0.0
+            _e_max = max(_smoothed.values()) if _smoothed else 1.0
+            _e_range = max(_e_max - _e_min, 0.01)
+            _energy = {_t: (_v - _e_min) / _e_range for _t, _v in _smoothed.items()}
+
+        _PAL_LOW  = ((80, 130, 255), (160, 80, 255))
+        _PAL_MID  = ((0, 255, 128), (0, 140, 255))
+        _PAL_HIGH = ((255, 160, 0), (255, 60, 40))
+
+        def _lerp_color(c1, c2, t):
+            t = max(0.0, min(1.0, t))
+            return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
+
         prev_active = {}
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in range(total_frames):
                 current_time = frame_idx / layout.fps - lead_in
+
+                # Energy-based color update
+                if config.energy_color and current_time >= 0:
+                    _e = _energy.get(int(current_time), 0.5)
+                    if _e < 0.60:
+                        _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
+                        _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / 0.60)
+                    elif _e < 0.90:
+                        _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - 0.60) / 0.30)
+                        _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
+                    else:
+                        _wc, _bc = _PAL_HIGH
+                    color_scheme.mode = "key_type"
+                    color_scheme.white_key_note_color = _wc
+                    color_scheme.black_key_note_color = _bc
 
                 if background_img is not None:
                     frame = background_img.copy()

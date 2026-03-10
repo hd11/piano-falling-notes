@@ -82,7 +82,7 @@ class VideoGenerator:
 
         # 5. Generate audio
         audio_path = None
-        if config.audio_file:
+        if config.audio_file and Path(config.audio_file).exists():
             # Use external audio file directly
             audio_path = config.audio_file
             print(f"  Using external audio: {audio_path}")
@@ -92,7 +92,7 @@ class VideoGenerator:
                 audio_path = str(Path(config.output_path).with_suffix('.wav'))
                 project_root = str(Path(__file__).resolve().parents[3])
                 generate_audio(config.input_path, audio_path, project_root,
-                               soundfont_path=config.soundfont,
+                               soundfont_path=config.soundfont if config.soundfont else None,
                                reverb=config.reverb)
                 print(f"  Audio: {audio_path}")
             except Exception as e:
@@ -187,6 +187,13 @@ class VideoGenerator:
                     if m not in prev_active or active_starts[m] != prev_active[m]:
                         newly_active[m] = v
 
+                # Neon burst on key strike
+                if config.neon_burst and newly_active:
+                    frame = effects.apply_neon_burst(
+                        frame, newly_active, keyboard.keys,
+                        layout.keyboard_top, color_scheme,
+                    )
+
                 # Ascending bubble particles around active notes
                 frame = effects.apply_ascending_bubbles(
                     frame, visible, active, keyboard.keys,
@@ -211,6 +218,12 @@ class VideoGenerator:
                 frame = effects.apply_note_glow(
                     frame, active, keyboard.keys,
                     layout.keyboard_top, color_scheme, current_time,
+                )
+
+                # Wave ripple along keyboard line
+                frame = effects.apply_wave_ripple(
+                    frame, active, keyboard.keys,
+                    layout.keyboard_top, color_scheme,
                 )
 
                 # Pedal visualization
