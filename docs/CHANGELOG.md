@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.1.1 — 코드 리뷰 수정 + 문서화 (2026-03-10)
+
+### 버그 수정
+- **CLI 플래그 명시적 처리 누락**: `--key-depression`, `--comet-trail-glow` 가 `__main__.py` 의 `# Handle flags` 섹션에 없어 Config 기본값 변경 시 깨질 수 있었던 문제 수정
+- **건반 눌림 시각적 빈 공간**: key_depression 활성 시 키 상단에 배경색이 노출되던 문제 → 눌린 키 색상의 어두운 그림자(×0.4/0.5)로 채워 자연스러운 눌림 표현
+
+### 코드 품질
+- **`_comet_trail_glow_enabled` 캡슐화**: 외부에서 주입하던 방식을 `VisualEffects.__init__`에서 초기화하고, `renderer.py`에서 `getattr` 대신 `config.comet_trail_glow` 직접 접근으로 변경
+- **`_trail_glow_points` 무제한 성장 방지**: 긴 곡에서 리스트가 무한 증가하던 문제 → 500개 상한 추가
+- **미사용 변수 제거**: `apply_c_note_rise` 내 `_CORE_COLOR` 미사용 변수 삭제
+- **믹스인 클래스 docstring 추가**: `BurstEffectsMixin`, `ParticleEffectsMixin`, `AmbientEffectsMixin` 상태 초기화 의존성 명시
+
+### 웹 UI
+- **초기화 버튼 누락 항목 수정**: "혜성 잔광" 토글이 초기화 버튼에서 리셋되지 않던 문제 수정
+
+### 문서화
+- **AGENTS.md 계층 문서 추가**: 프로젝트 전체 10개 디렉토리에 AI 에이전트용 계층형 문서 생성 (root → package → submodules)
+
+---
+
 ## v1.1.0 — 이펙트 모듈 분리 + 신규 효과 (2026-03-10)
 
 ### 구조 개선
