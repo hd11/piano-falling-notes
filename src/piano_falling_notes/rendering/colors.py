@@ -47,7 +47,7 @@ _PART_COLORS = [
 class ColorScheme:
     def __init__(
         self,
-        mode: str = "pitch_range",
+        mode: str = "single",
         palette: tuple | None = None,
         single_color: tuple = (0, 210, 210),
         white_key_note_color: tuple = (0, 255, 128),

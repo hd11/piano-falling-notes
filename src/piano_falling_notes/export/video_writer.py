@@ -49,4 +49,6 @@ class VideoWriter:
         except (BrokenPipeError, OSError):
             pass
         self.process.wait()
+        if exc_type is None and self.process.returncode != 0:
+            raise RuntimeError(f"FFmpeg exited with code {self.process.returncode}")
         return False

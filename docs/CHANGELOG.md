@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.0 — 안정 릴리스 (2026-03-10)
+
+### 버그 수정
+- **VideoWriter `__exit__` FFmpeg 에러 무시 문제**: context manager 종료 시 FFmpeg 비정상 종료(returncode ≠ 0)를 감지하지 못하던 문제 수정 — 정상 종료 시에만 returncode 검사, 예외 발생 중일 때는 원래 예외 우선
+- **ColorScheme 기본 모드 불일치**: `ColorScheme` 기본값이 `"pitch_range"`로 되어 있어 `Config` 기본값(`"single"`)과 불일치하던 문제 수정 → `"single"`로 통일
+
+### 안정화
+- 심층 코드/로직 분석 통과 — 렌더 파이프라인, 이펙트 시스템, 에너지 색상, 타임라인 처리 전반 검증 완료
+- pyproject.toml 버전 `1.0.0` 반영
+
+---
+
 ## v0.10.0 — 렌더 파이프라인 리팩토링 (2026-03-10)
 
 ### 리팩토링
