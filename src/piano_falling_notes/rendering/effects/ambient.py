@@ -7,6 +7,8 @@ from PIL import Image
 
 
 class AmbientEffectsMixin:
+    """Requires VisualEffects.__init__ for state initialization."""
+
     def apply_note_glow(
         self,
         img: Image.Image,

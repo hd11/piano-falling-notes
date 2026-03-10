@@ -80,6 +80,10 @@ def main():
         config.velocity_effect = True
     if args.pedal:
         config.pedal = True
+    if args.key_depression:
+        config.key_depression = True
+    if args.comet_trail_glow:
+        config.comet_trail_glow = True
 
     # Generate
     generator = VideoGenerator()

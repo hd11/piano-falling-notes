@@ -5,6 +5,8 @@ from PIL import Image
 
 
 class BurstEffectsMixin:
+    """Requires VisualEffects.__init__ for state initialization."""
+
     def apply_neon_burst(
         self,
         img: Image.Image,

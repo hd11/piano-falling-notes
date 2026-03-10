@@ -107,11 +107,11 @@ def render_frame(frame, layout, color_scheme, falling, keyboard, effects,
     # 8. Comet effect
     if config.comet_effect:
         # Set comet trail glow feed flag
-        effects._comet_trail_glow_enabled = getattr(config, 'comet_trail_glow', False)
+        effects._comet_trail_glow_enabled = config.comet_trail_glow
         frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
 
     # 8b. Comet trail glow (lingering wake)
-    if config.comet_effect and getattr(config, 'comet_trail_glow', False):
+    if config.comet_effect and config.comet_trail_glow:
         frame = effects.apply_comet_trail_glow(frame, layout.keyboard_top)
 
     # 9. Note glow (glow_enabled guard — fixes missing guard bug)

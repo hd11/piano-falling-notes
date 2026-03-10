@@ -23,6 +23,7 @@ class VisualEffects(BurstEffectsMixin, ParticleEffectsMixin, AmbientEffectsMixin
         self._star_particles = []    # list of star particle dicts
         self._star_frame = 0         # frame counter for twinkling phase
         self._trail_glow_points = []  # lingering glow points from comet trails
+        self._comet_trail_glow_enabled = False
 
 
 __all__ = ["VisualEffects"]

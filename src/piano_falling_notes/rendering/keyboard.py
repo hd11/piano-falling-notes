@@ -69,6 +69,9 @@ class KeyboardRenderer:
             x0 = int(key.x)
             x1 = int(key.x + key.width) - 1
             y_offset = 3 if self.key_depression else 0
+            if self.key_depression:
+                shadow = tuple(int(c * 0.4) for c in color_rgb)
+                draw.rectangle([x0, 0, x1, y_offset - 1], fill=shadow)
             draw.rectangle([x0, y_offset, x1, white_bottom], fill=color_rgb, outline=KEY_BORDER_COLOR)
 
         # Re-draw all black keys (inactive) so they stay on top of highlighted white keys
@@ -92,6 +95,9 @@ class KeyboardRenderer:
             x0 = int(key.x)
             x1 = int(key.x + key.width)
             y_offset = 2 if self.key_depression else 0
+            if self.key_depression:
+                shadow = tuple(int(c * 0.5) for c in color_rgb)
+                draw.rectangle([x0, 0, x1, y_offset - 1], fill=shadow)
             draw.rectangle([x0, y_offset, x1, black_bottom], fill=bright)
 
         return img

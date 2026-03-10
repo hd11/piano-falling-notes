@@ -7,6 +7,8 @@ from PIL import Image
 
 
 class ParticleEffectsMixin:
+    """Requires VisualEffects.__init__ for state initialization."""
+
     def apply_ascending_bubbles(
         self,
         img: Image.Image,
@@ -193,7 +195,6 @@ class ParticleEffectsMixin:
             (np.array([80,  255, 140], dtype=np.float32), np.array([200, 255, 220], dtype=np.float32)),  # mint
             (np.array([255, 220, 40],  dtype=np.float32), np.array([255, 250, 200], dtype=np.float32)),  # yellow
         ]
-        _CORE_COLOR = self._current_comet_core
         TRAIL_LEN = 25
 
         # Time-based trigger: every 1–3 seconds, from a currently-active note
@@ -380,12 +381,13 @@ class ParticleEffectsMixin:
                 if len(p['trail']) >= 3:
                     for tx, ty in p['trail'][-3:]:
                         if 0 <= ty < keyboard_top:
-                            self._trail_glow_points.append({
-                                'x': tx, 'y': ty,
-                                'color': p['color'].copy(),
-                                'life': 0,
-                                'max_life': 60,  # ~1s at 60fps, ~2s at 30fps
-                            })
+                            if len(self._trail_glow_points) < 500:
+                                self._trail_glow_points.append({
+                                    'x': tx, 'y': ty,
+                                    'color': p['color'].copy(),
+                                    'life': 0,
+                                    'max_life': 60,  # ~1s at 60fps, ~2s at 30fps
+                                })
 
         self._firefly_particles = alive
 
