@@ -113,6 +113,12 @@ def _parse_config_from_form(form):
     # --pedal
     config.pedal = (form.get('pedal', 'off') == 'on')
 
+    # --key-depression
+    config.key_depression = (form.get('key_depression', 'off') == 'on')
+
+    # --comet-trail-glow
+    config.comet_trail_glow = (form.get('comet_trail_glow', 'off') == 'on')
+
     return config
 
 
@@ -197,7 +203,7 @@ def run_conversion(job_id, input_path, config):
                                    single_color=config.single_note_color,
                                    white_key_note_color=config.white_key_note_color,
                                    black_key_note_color=config.black_key_note_color)
-        keyboard = KeyboardRenderer(layout, color_scheme)
+        keyboard = KeyboardRenderer(layout, color_scheme, key_depression=config.key_depression)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
                                        guide_lines=config.guide_lines,
@@ -443,7 +449,7 @@ def preview():
                                    single_color=config.single_note_color,
                                    white_key_note_color=config.white_key_note_color,
                                    black_key_note_color=config.black_key_note_color)
-        keyboard = KeyboardRenderer(layout, color_scheme)
+        keyboard = KeyboardRenderer(layout, color_scheme, key_depression=config.key_depression)
         falling = FallingNotesRenderer(layout, color_scheme, keyboard.keys,
                                        note_duration_ratio=config.note_duration_ratio,
                                        guide_lines=config.guide_lines,

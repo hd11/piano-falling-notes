@@ -11,9 +11,10 @@ KEY_BORDER_COLOR = (80, 80, 80)
 
 
 class KeyboardRenderer:
-    def __init__(self, layout: Layout, color_scheme: ColorScheme):
+    def __init__(self, layout: Layout, color_scheme: ColorScheme, key_depression: bool = False):
         self.layout = layout
         self.colors = color_scheme
+        self.key_depression = key_depression
         self.keys = build_key_map(layout.width)
         self._base_image = self._render_base()
 
@@ -67,7 +68,8 @@ class KeyboardRenderer:
             color_rgb = self.colors.note_color_rgb(midi, velocity)
             x0 = int(key.x)
             x1 = int(key.x + key.width) - 1
-            draw.rectangle([x0, 0, x1, white_bottom], fill=color_rgb, outline=KEY_BORDER_COLOR)
+            y_offset = 3 if self.key_depression else 0
+            draw.rectangle([x0, y_offset, x1, white_bottom], fill=color_rgb, outline=KEY_BORDER_COLOR)
 
         # Re-draw all black keys (inactive) so they stay on top of highlighted white keys
         for key in self.keys.values():
@@ -89,6 +91,7 @@ class KeyboardRenderer:
             bright = tuple(min(255, int(c * 1.25)) for c in color_rgb)
             x0 = int(key.x)
             x1 = int(key.x + key.width)
-            draw.rectangle([x0, 0, x1, black_bottom], fill=bright)
+            y_offset = 2 if self.key_depression else 0
+            draw.rectangle([x0, y_offset, x1, black_bottom], fill=bright)
 
         return img

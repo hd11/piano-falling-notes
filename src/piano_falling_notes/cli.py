@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument('--background-image', default=None, help='Background image path (.jpg/.png/.webp)')
     parser.add_argument('--velocity-effect', action='store_true', help='Velocity-based note brightness scaling')
     parser.add_argument('--pedal', action='store_true', help='Sustain pedal visualization')
+    parser.add_argument('--key-depression', action='store_true', help='Visual key press depression effect')
+    parser.add_argument('--comet-trail-glow', action='store_true', help='Lingering glow trail behind comets')
     parser.add_argument('--glow-intensity', type=float, default=None)
     # Web server options
     parser.add_argument('--web', action='store_true', help='Start web UI server')

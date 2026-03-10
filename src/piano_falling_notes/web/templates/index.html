@@ -609,6 +609,17 @@
 
       <div class="toggle-row">
         <div class="toggle-label-group">
+          <span class="label-main">혜성 잔광</span>
+          <span class="label-sub">--comet-trail-glow · 혜성 뒤에 남는 부드러운 발광 잔상 (기본 OFF)</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="comet_trail_glow" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
           <span class="label-main">별빛흐름</span>
           <span class="label-sub">--no-starflow · 배경에 흐르는 별빛 파티클</span>
         </div>
@@ -680,6 +691,17 @@
         </div>
         <label class="toggle">
           <input type="checkbox" id="pedal" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="label-main">건반 눌림 효과</span>
+          <span class="label-sub">--key-depression · 연주 시 건반이 눌리는 시각 효과</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="key_depression" />
           <div class="toggle-track"></div>
         </label>
       </div>
@@ -934,6 +956,7 @@
     // Effects
     fd.append('energy_color',  document.getElementById('energy_color').checked  ? 'on' : 'off');
     fd.append('comet_effect',  document.getElementById('comet_effect').checked  ? 'on' : 'off');
+    fd.append('comet_trail_glow', document.getElementById('comet_trail_glow').checked ? 'on' : 'off');
     fd.append('starflow',      document.getElementById('starflow').checked      ? 'on' : 'off');
     fd.append('neon_burst',    document.getElementById('neon_burst').checked    ? 'on' : 'off');
     fd.append('glow',          document.getElementById('glow').checked          ? 'on' : 'off');
@@ -947,6 +970,7 @@
     fd.append('vertical',       document.getElementById('vertical').checked       ? 'on' : 'off');
     fd.append('velocity_effect', document.getElementById('velocity_effect').checked ? 'on' : 'off');
     fd.append('pedal',          document.getElementById('pedal').checked          ? 'on' : 'off');
+    fd.append('key_depression', document.getElementById('key_depression').checked ? 'on' : 'off');
     fd.append('reverb',         document.getElementById('reverb').checked         ? 'on' : 'off');
 
     // File uploads
@@ -1197,6 +1221,7 @@
     document.getElementById('vertical').checked = false;
     document.getElementById('velocity_effect').checked = false;
     document.getElementById('pedal').checked = false;
+    document.getElementById('key_depression').checked = false;
     document.getElementById('reverb').checked = false;
     document.getElementById('preview_time').value = 10;
     previewTimeLabel.textContent = '10%';

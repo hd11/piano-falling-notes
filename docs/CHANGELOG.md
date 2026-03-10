@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.1.0 — 이펙트 모듈 분리 + 신규 효과 (2026-03-10)
+
+### 구조 개선
+- **effects.py 패키지 분리**: 841줄 단일 파일을 `effects/` 패키지로 분리
+  - `__init__.py` — VisualEffects 파사드 (믹스인 조합)
+  - `burst.py` — BurstEffectsMixin (`apply_neon_burst`)
+  - `particles.py` — ParticleEffectsMixin (`apply_ascending_bubbles`, `apply_c_note_rise`, `apply_comet_trail_glow`)
+  - `ambient.py` — AmbientEffectsMixin (`apply_note_glow`, `apply_wave_ripple`, `apply_pedal_glow`, `apply_starflow`)
+- 기존 공개 API (`from ..rendering.effects import VisualEffects`) 변경 없음
+
+### 새 기능
+- **건반 눌림 효과** (`--key-depression`): 활성 키가 시각적으로 눌리는 효과 (흰건반 3px, 검은건반 2px 하강)
+- **혜성 잔광** (`--comet-trail-glow`): 혜성이 지나간 자리에 부드러운 빛의 잔상이 ~2초간 남는 효과 (가우시안 글로우, 60프레임 수명)
+
+### CLI / 웹 UI
+- CLI: `--key-depression`, `--comet-trail-glow` 플래그 추가 (기본 OFF)
+- 웹 UI: "건반 눌림 효과", "혜성 잔광" 토글 스위치 추가
+- Config: `key_depression`, `comet_trail_glow` 필드 추가
+
+---
+
 ## v1.0.0 — 안정 릴리스 (2026-03-10)
 
 ### 버그 수정
