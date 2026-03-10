@@ -1,13 +1,24 @@
 # Changelog
 
-## v0.9.1 — CLI/웹 렌더링 기능 일치 수정 (2026-03-10)
+## v0.10.0 — 렌더 파이프라인 리팩토링 (2026-03-10)
+
+### 리팩토링
+- **공유 렌더 모듈** (`core/renderer.py`): CLI·웹 변환·웹 프리뷰 3곳에 복사되어 있던 렌더 루프를 `render_frame()`, `compute_energy_profile()`, `make_background_frame()` 공유 함수로 통합
+- **에너지 색상 계산 통합**: 3곳에 중복되던 에너지 프로파일 계산 + 팔레트 보간을 `compute_energy_profile()` + `apply_energy_color()`로 추출
+- **코드 361줄 삭제**: 중복 렌더 코드, 죽은 코드 제거로 유지보수성 대폭 향상
 
 ### 버그 수정
-- **CLI에 `neon_burst` 누락**: 키 스트라이크 시 물방울 스플래시 이펙트가 CLI 렌더에서 빠져있던 문제 수정
-- **CLI에 `wave_ripple` 누락**: 키보드 상단 파도 리플 이펙트가 CLI 렌더에서 빠져있던 문제 수정
-- **웹 변환에 `energy_color` 누락**: 에너지 기반 색상 변환이 웹 변환 경로에서 미적용되던 문제 수정
-- **외부 오디오 파일 존재 확인**: `--audio-file` 경로가 유효하지 않을 때 무시하도록 `Path.exists()` 검사 추가
-- **빈 soundfont 경로 정규화**: CLI에서 빈 문자열이 `None` 대신 전달되던 문제 수정
+- **CLI glow 무조건 렌더**: `glow_enabled` 플래그 체크 없이 항상 글로우가 렌더되던 문제 수정
+- **웹 프리뷰 energy color 모드 누락**: 에너지 색상 적용 시 `color_scheme.mode = "key_type"` 미설정 문제 수정
+- **웹 변환 ascending_bubbles 누락**: `run_conversion()`에서 상승 파티클 이펙트가 빠져있던 문제 수정
+- **CLI에 `neon_burst` 누락**: 키 스트라이크 스플래시가 CLI에서 빠져있던 문제 수정 (v0.9.1)
+- **웹 변환에 `energy_color` 누락**: 웹 변환 경로에서 미적용되던 문제 수정 (v0.9.1)
+- **외부 오디오 파일 존재 확인**: `Path.exists()` 검사 추가 (v0.9.1)
+- **빈 soundfont 경로 정규화**: 빈 문자열 → `None` 변환 (v0.9.1)
+
+### 클린업
+- **죽은 코드 제거**: `apply_dj_eq` 이펙트 (미사용), `note_style` 설정 필드/CLI 인수 삭제
+- **import 정리**: `effects.py` 내 4곳 인라인 `import math` → 모듈 레벨 통합
 
 ---
 

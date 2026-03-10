@@ -142,6 +142,7 @@ def run_conversion(job_id, input_path, config):
     from ..rendering.themes import THEMES
     from ..export.video_writer import VideoWriter
     from ..export.audio import generate_audio, mux_video_audio
+    from ..core.renderer import compute_energy_profile, render_frame, make_background_frame
     from PIL import Image
 
     def update(status, progress=None, total_frames=None):
@@ -238,121 +239,19 @@ def run_conversion(job_id, input_path, config):
         else:
             video_only_path = output_path
 
-        # Pre-compute energy profile for energy-based color (matching CLI generator)
-        _energy = {}
-        if config.energy_color:
-            _ENERGY_WINDOW = 4.0
-            _raw_energy = {}
-            for _t in range(int(timeline.total_duration) + 2):
-                _wn = [n for n in timeline.notes if _t <= n.start_seconds < _t + _ENERGY_WINDOW]
-                if _wn:
-                    _density = len(_wn) / _ENERGY_WINDOW
-                    _avg_vel = sum(n.velocity for n in _wn) / len(_wn)
-                    _raw_energy[_t] = _density * 0.5 + _avg_vel * 0.5
-                else:
-                    _raw_energy[_t] = 0.0
-            _smoothed = {_t: sum(_raw_energy.get(_t + d, 0) for d in range(-2, 3)) / 5
-                         for _t in _raw_energy}
-            _e_min = min(_smoothed.values()) if _smoothed else 0.0
-            _e_max = max(_smoothed.values()) if _smoothed else 1.0
-            _e_range = max(_e_max - _e_min, 0.01)
-            _energy = {_t: (_v - _e_min) / _e_range for _t, _v in _smoothed.items()}
-
-        _PAL_LOW  = ((80, 130, 255), (160, 80, 255))
-        _PAL_MID  = ((0, 255, 128), (0, 140, 255))
-        _PAL_HIGH = ((255, 160, 0), (255, 60, 40))
-
-        def _lerp_color(c1, c2, t):
-            t = max(0.0, min(1.0, t))
-            return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
+        # Pre-compute energy profile
+        _energy = compute_energy_profile(timeline.notes, timeline.total_duration) if config.energy_color else {}
 
         prev_active = {}
         with VideoWriter(video_only_path, layout.width, layout.height, layout.fps, config.crf) as writer:
             for frame_idx in range(total_frames):
                 current_time = frame_idx / layout.fps - lead_in
-
-                # Energy-based color update
-                if config.energy_color and current_time >= 0:
-                    _e = _energy.get(int(current_time), 0.5)
-                    if _e < 0.60:
-                        _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
-                        _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / 0.60)
-                    elif _e < 0.90:
-                        _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - 0.60) / 0.30)
-                        _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
-                    else:
-                        _wc, _bc = _PAL_HIGH
-                    color_scheme.mode = "key_type"
-                    color_scheme.white_key_note_color = _wc
-                    color_scheme.black_key_note_color = _bc
-
-                if background_img is not None:
-                    frame = background_img.copy()
-                else:
-                    frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
-
-                view_start = current_time
-                view_end = current_time + layout.lookahead_seconds
-                visible = time_index.query(view_start, view_end)
-
-                frame = falling.render(frame, visible, current_time)
-
-                # Find currently playing notes
-                active = {}
-                active_starts = {}
-                for n in visible:
-                    if n.start_seconds <= current_time < n.start_seconds + n.duration_seconds * config.note_duration_ratio:
-                        active[n.midi_number] = n.velocity
-                        active_starts[n.midi_number] = n.start_seconds
-
-                # Newly struck
-                newly_active = {}
-                for m, v in active.items():
-                    if m not in prev_active or active_starts[m] != prev_active[m]:
-                        newly_active[m] = v
-
-                # Neon burst on key strike
-                if config.neon_burst and newly_active:
-                    frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
-
-                # Comet effect
-                if config.comet_effect:
-                    frame = effects.apply_c_note_rise(frame, newly_active, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
-
-                # Starflow
-                if config.starflow:
-                    frame = effects.apply_starflow(frame, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)
-
-                # Glow
-                if config.glow_enabled and active:
-                    frame = effects.apply_note_glow(
-                        frame, active, keyboard.keys,
-                        layout.keyboard_top, color_scheme, current_time,
-                    )
-
-                # Wave ripple along keyboard line
-                frame = effects.apply_wave_ripple(
-                    frame, active, keyboard.keys,
-                    layout.keyboard_top, color_scheme,
+                frame = make_background_frame(layout, config, background_img)
+                frame, prev_active = render_frame(
+                    frame, layout, color_scheme, falling, keyboard, effects,
+                    time_index, current_time, config, _energy, metadata, prev_active
                 )
-
-                # Pedal visualization
-                if config.pedal and metadata.get('pedal_events'):
-                    pedal_active = any(
-                        pe['start_seconds'] <= current_time < pe['end_seconds']
-                        for pe in metadata['pedal_events']
-                    )
-                    if pedal_active:
-                        frame = effects.apply_pedal_glow(
-                            frame, layout.keyboard_top, layout.width,
-                        )
-
-                kb_img = keyboard.render(active)
-                frame.paste(kb_img, (0, layout.keyboard_top))
-
                 writer.write_frame(frame)
-                prev_active = active_starts
-
                 if frame_idx % 30 == 0:
                     update('rendering', progress=frame_idx)
 
@@ -492,6 +391,7 @@ def preview():
         from ..rendering.effects import VisualEffects
         from ..rendering.colors import ColorScheme
         from ..rendering.themes import THEMES
+        from ..core.renderer import compute_energy_profile, render_frame, make_background_frame
         from PIL import Image
         import io
 
@@ -573,78 +473,13 @@ def preview():
 
         current_time = t_try
 
-        # Energy-based color for preview frame
-        if config.energy_color:
-            _ENERGY_WINDOW = 4.0
-            _raw_energy = {}
-            for _t in range(int(timeline.total_duration) + 2):
-                _wn = [n for n in timeline.notes if _t <= n.start_seconds < _t + _ENERGY_WINDOW]
-                if _wn:
-                    _density = len(_wn) / _ENERGY_WINDOW
-                    _avg_vel = sum(n.velocity for n in _wn) / len(_wn)
-                    _raw_energy[_t] = _density * 0.5 + _avg_vel * 0.5
-                else:
-                    _raw_energy[_t] = 0.0
-            _smoothed = {_t: sum(_raw_energy.get(_t + d, 0) for d in range(-2, 3)) / 5
-                         for _t in _raw_energy}
-            _e_min = min(_smoothed.values()) if _smoothed else 0.0
-            _e_max = max(_smoothed.values()) if _smoothed else 1.0
-            _e_range = max(_e_max - _e_min, 0.01)
-            _energy = {_t: (_v - _e_min) / _e_range for _t, _v in _smoothed.items()}
-
-            _PAL_LOW  = ((80, 130, 255), (160, 80, 255))
-            _PAL_MID  = ((0, 255, 128), (0, 140, 255))
-            _PAL_HIGH = ((255, 160, 0), (255, 60, 40))
-
-            def _lerp_color(c1, c2, t):
-                t = max(0.0, min(1.0, t))
-                return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
-
-            _e = _energy.get(int(current_time), 0.5)
-            if _e < 0.60:
-                _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
-                _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / 0.60)
-            elif _e < 0.90:
-                _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - 0.60) / 0.30)
-                _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
-            else:
-                _wc, _bc = _PAL_HIGH
-            color_scheme.white_key_note_color = _wc
-            color_scheme.black_key_note_color = _bc
-
-        if bg_img_preview is not None:
-            frame = bg_img_preview.copy()
-        else:
-            frame = Image.new('RGB', (layout.width, layout.height), config.background_color)
-        frame = falling.render(frame, visible, current_time)
-
-        # Ascending bubbles (render a few frames to seed particles)
-        for warmup in range(10):
-            frame_temp = Image.new('RGB', (layout.width, layout.height), config.background_color)
-            frame_temp = falling.render(frame_temp, visible, current_time)
-            effects.apply_ascending_bubbles(frame_temp, visible, active, keyboard.keys,
-                                            layout.keyboard_top, color_scheme, current_time)
-        frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys,
-                                                layout.keyboard_top, color_scheme, current_time)
-
-        # Comet effect
-        if config.comet_effect:
-            frame = effects.apply_c_note_rise(frame, active, active, keyboard.keys,
-                                              layout.keyboard_top, color_scheme, current_time)
-
-        # Starflow
-        if config.starflow:
-            frame = effects.apply_starflow(frame, active, keyboard.keys,
-                                           layout.keyboard_top, color_scheme, current_time)
-
-        # Glow
-        if config.glow_enabled and active:
-            frame = effects.apply_note_glow(frame, active, keyboard.keys,
-                                            layout.keyboard_top, color_scheme, current_time)
-
-        # Keyboard
-        kb_img = keyboard.render(active)
-        frame.paste(kb_img, (0, layout.keyboard_top))
+        # Energy profile and render using shared pipeline
+        _energy = compute_energy_profile(timeline.notes, timeline.total_duration) if config.energy_color else {}
+        frame = make_background_frame(layout, config, bg_img_preview)
+        frame, _ = render_frame(
+            frame, layout, color_scheme, falling, keyboard, effects,
+            time_index, current_time, config, _energy, metadata, {}
+        )
 
         # Save to bytes
         buf = io.BytesIO()

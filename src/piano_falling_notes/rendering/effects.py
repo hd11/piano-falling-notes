@@ -1,5 +1,7 @@
 """Visual effects - optimized for performance."""
 
+import math
+
 import numpy as np
 from PIL import Image
 
@@ -17,8 +19,6 @@ class VisualEffects:
         """Apply pearlescent glow above keyboard for active notes, matching bubble aesthetic."""
         if not active_keys:
             return img
-
-        import math
 
         # Work on a narrow strip above the keyboard
         glow_height = 50
@@ -337,8 +337,6 @@ class VisualEffects:
         Small luminous particles fall downward alongside the falling notes,
         creating an elegant dreamy pearlescent effect.
         """
-        import math
-
         white = np.array([255, 255, 255], dtype=np.float32)
 
         # --- Spawn new particles for each active note ---
@@ -489,72 +487,6 @@ class VisualEffects:
 
         return Image.fromarray(arr)
 
-    def apply_dj_eq(
-        self,
-        img: Image.Image,
-        active_keys: dict,  # {midi_number: velocity}
-        key_map: dict,
-        keyboard_top: int,
-        color_scheme,
-        eq_height: int = 150,  # max height of EQ bars in pixels
-    ) -> Image.Image:
-        """DJ EQ / equalizer visualization: velocity-driven vertical bars above keyboard."""
-        if not active_keys:
-            return img
-
-        arr = np.array(img)
-        strip_top = max(0, keyboard_top - eq_height)
-        strip_bottom = keyboard_top  # bars grow upward from keyboard_top
-
-        h = strip_bottom - strip_top  # full EQ strip height
-
-        strip = arr[strip_top:strip_bottom].astype(np.float32)
-
-        # Pre-build a vertical gradient multiplier: bottom row = 1.0, top row = 0.3
-        # strip row 0 is the topmost pixel, row h-1 is just above the keyboard
-        grad = np.linspace(0.3, 1.0, h, dtype=np.float32)  # dim at top, bright at bottom
-
-        for midi, velocity in active_keys.items():
-            key = key_map.get(midi)
-            if key is None:
-                continue
-
-            color = color_scheme.note_color_rgb(midi, velocity)
-            c = np.array(color, dtype=np.float32)
-
-            # Bar occupies the same x footprint as the note (1 px gap each side)
-            x0 = max(0, int(key.x) + 1)
-            x1 = min(img.width, int(key.x + key.width) - 1)
-            if x0 >= x1:
-                continue
-
-            # Bar height proportional to velocity (0–1 float assumed by convention)
-            bar_px = max(1, int(velocity * eq_height))
-            bar_px = min(bar_px, h)
-
-            # Rows in strip that the bar occupies: bottom-aligned
-            bar_row_start = h - bar_px   # strip index of bar top
-            bar_row_end = h              # strip index past bar bottom
-
-            # Gradient slice for this bar (subset of full grad)
-            bar_grad = grad[bar_row_start:bar_row_end]  # shape (bar_px,)
-
-            # Color columns: shape (bar_px, width, 3)
-            bar_color = (
-                bar_grad[:, np.newaxis, np.newaxis]
-                * c[np.newaxis, np.newaxis, :]
-            )  # (bar_px, 1, 3) broadcast to (bar_px, x1-x0, 3) below
-
-            region = strip[bar_row_start:bar_row_end, x0:x1, :]
-            # Additive blend capped at 255
-            strip[bar_row_start:bar_row_end, x0:x1, :] = np.minimum(
-                region + bar_color, 255.0
-            )
-
-        strip = np.clip(strip, 0, 255).astype(np.uint8)
-        arr[strip_top:strip_bottom] = strip
-        return Image.fromarray(arr)
-
     def apply_c_note_rise(
         self,
         img: Image.Image,
@@ -568,8 +500,6 @@ class VisualEffects:
         """Randomly spawn a glowing comet dot from a currently-active key,
         every 3–5 seconds, rising to screen top along a sine-wave path with tail.
         """
-        import math
-
         _ALL_COLORS = [
             (np.array([255, 140, 20],  dtype=np.float32), np.array([255, 230, 180], dtype=np.float32)),  # orange
             (np.array([255, 40,  100], dtype=np.float32), np.array([255, 200, 220], dtype=np.float32)),  # hot pink
@@ -805,8 +735,6 @@ class VisualEffects:
         current_time: float,
     ) -> Image.Image:
         """Ambient starfield that drifts across the background above the keyboard."""
-        import math
-
         TARGET_COUNT = 300
         w = img.width
         h_area = max(1, keyboard_top)

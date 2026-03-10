@@ -42,7 +42,6 @@ class Config:
     note_border_radius: float = 4.0
     neon_burst: bool = True  # neon burst on key strike
     guide_lines: bool = True  # background guide lines
-    note_style: str = "standard"  # "standard" or "djeq" (DJ EQ Max visualization)
     note_duration_ratio: float = 0.92  # visual shortening ratio for note separation
     glitter: bool = False  # twinkling glitter on note bars
     comet_effect: bool = True  # comet/shooting-star effect

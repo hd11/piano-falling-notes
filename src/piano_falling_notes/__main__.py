@@ -45,8 +45,6 @@ def main():
     if args.black_key_color:
         hex_str = args.black_key_color.lstrip('#')
         config.black_key_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
-    if args.note_style:
-        config.note_style = args.note_style
     if args.no_neon_burst:
         config.neon_burst = False
     if args.no_guide_lines:

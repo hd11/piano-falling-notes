@@ -19,7 +19,6 @@ def parse_args():
     parser.add_argument('--note-color', default=None, help='Note color in single mode (hex, e.g. #00D2D2)')
     parser.add_argument('--white-key-color', default=None, help='White key note color in key_type mode (hex, e.g. #00FF80)')
     parser.add_argument('--black-key-color', default=None, help='Black key note color in key_type mode (hex, e.g. #0080FF)')
-    parser.add_argument('--note-style', default=None, choices=['standard', 'djeq'], help='Note visualization style')
     parser.add_argument('--no-neon-burst', action='store_true', help='Disable neon burst effect')
     parser.add_argument('--no-guide-lines', action='store_true', help='Disable guide lines')
     parser.add_argument('--theme', default=None, choices=['auto', 'classic', 'midnight', 'sunset', 'ocean', 'neon', 'pastel'])
