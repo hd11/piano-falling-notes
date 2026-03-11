@@ -40,13 +40,15 @@ class Config:
     glow_intensity: float = 0.7
     particles_enabled: bool = False
     note_border_radius: float = 4.0
-    neon_burst: bool = True  # neon burst on key strike
+    water_splash: bool = True  # water splash on key strike
     guide_lines: bool = True  # background guide lines
     note_duration_ratio: float = 0.92  # visual shortening ratio for note separation
     glitter: bool = False  # twinkling glitter on note bars
     comet_effect: bool = True  # comet/shooting-star effect
     comet_trail_glow: bool = False  # lingering glow trail behind comets
     energy_color: bool = True  # energy-based dynamic note color
+    energy_mid_threshold: float = 0.60   # low→mid transition (0.0–1.0)
+    energy_high_threshold: float = 0.90  # mid→high transition (0.0–1.0)
     starflow: bool = True  # ambient starflow background effect
     key_depression: bool = False  # visual key press depression effect
 

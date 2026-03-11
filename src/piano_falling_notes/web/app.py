@@ -83,10 +83,19 @@ def _parse_config_from_form(form):
 
     # Effect toggles (CLI: --no-* flags)
     config.energy_color = (form.get('energy_color', 'on') == 'on')
+    try:
+        config.energy_mid_threshold = float(form.get('energy_mid_threshold', '0.60'))
+        config.energy_high_threshold = float(form.get('energy_high_threshold', '0.90'))
+    except (ValueError, TypeError):
+        pass
     config.comet_effect = (form.get('comet_effect', 'on') == 'on')
     config.starflow = (form.get('starflow', 'on') == 'on')
-    config.neon_burst = (form.get('neon_burst', 'on') == 'on')
+    config.water_splash = (form.get('water_splash', 'on') == 'on')
     config.glow_enabled = (form.get('glow', 'on') == 'on')
+    try:
+        config.glow_intensity = float(form.get('glow_intensity', '0.7'))
+    except (ValueError, TypeError):
+        pass
     config.guide_lines = (form.get('guide_lines', 'on') == 'on')
     config.glitter = (form.get('glitter', 'off') == 'on')
 

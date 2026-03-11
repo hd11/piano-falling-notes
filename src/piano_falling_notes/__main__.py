@@ -45,8 +45,8 @@ def main():
     if args.black_key_color:
         hex_str = args.black_key_color.lstrip('#')
         config.black_key_note_color = (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
-    if args.no_neon_burst:
-        config.neon_burst = False
+    if args.no_water_splash:
+        config.water_splash = False
     if args.no_guide_lines:
         config.guide_lines = False
     if args.glitter:
@@ -55,6 +55,10 @@ def main():
         config.comet_effect = False
     if args.no_energy_color:
         config.energy_color = False
+    if args.energy_mid_threshold is not None:
+        config.energy_mid_threshold = args.energy_mid_threshold
+    if args.energy_high_threshold is not None:
+        config.energy_high_threshold = args.energy_high_threshold
     if args.no_starflow:
         config.starflow = False
     if args.theme:

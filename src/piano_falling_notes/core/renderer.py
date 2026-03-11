@@ -39,16 +39,17 @@ def compute_energy_profile(timeline_notes, total_duration):
     return {_t: (_v - _e_min) / _e_range for _t, _v in _smoothed.items()}
 
 
-def apply_energy_color(color_scheme, energy_map, current_time):
+def apply_energy_color(color_scheme, energy_map, current_time, mid_threshold=0.60, high_threshold=0.90):
     """Apply energy-based color to color_scheme for current_time."""
     _e = energy_map.get(int(current_time), 0.5)
-    if _e < 0.60:                          # blue  (0 ~ 0.60 — 60%)
-        _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / 0.60)
-        _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / 0.60)
-    elif _e < 0.90:                        # green (0.60 ~ 0.90 — 30%)
-        _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - 0.60) / 0.30)
-        _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - 0.60) / 0.30)
-    else:                                  # orange/red (0.90 ~ 1.0 — 10%)
+    if _e <= mid_threshold:
+        _wc = _lerp_color(_PAL_LOW[0], _PAL_MID[0], _e / max(mid_threshold, 0.001))
+        _bc = _lerp_color(_PAL_LOW[1], _PAL_MID[1], _e / max(mid_threshold, 0.001))
+    elif _e <= high_threshold:
+        _mid_range = max(high_threshold - mid_threshold, 0.001)
+        _wc = _lerp_color(_PAL_MID[0], _PAL_HIGH[0], (_e - mid_threshold) / _mid_range)
+        _bc = _lerp_color(_PAL_MID[1], _PAL_HIGH[1], (_e - mid_threshold) / _mid_range)
+    else:                                  # orange/red (high_threshold ~ 1.0)
         _wc, _bc = _PAL_HIGH
     color_scheme.mode = "key_type"
     color_scheme.white_key_note_color = _wc
@@ -70,7 +71,9 @@ def render_frame(frame, layout, color_scheme, falling, keyboard, effects,
     """
     # 1. Energy-based color update
     if config.energy_color and current_time >= 0 and energy_map:
-        apply_energy_color(color_scheme, energy_map, current_time)
+        apply_energy_color(color_scheme, energy_map, current_time,
+                           mid_threshold=config.energy_mid_threshold,
+                           high_threshold=config.energy_high_threshold)
 
     # 2. Query visible notes
     view_start = current_time
@@ -93,9 +96,9 @@ def render_frame(frame, layout, color_scheme, falling, keyboard, effects,
         if m not in prev_active or active_starts[m] != prev_active[m]:
             newly_active[m] = v
 
-    # 5. Neon burst on key strike
-    if config.neon_burst and newly_active:
-        frame = effects.apply_neon_burst(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
+    # 5. Water splash on key strike
+    if config.water_splash and newly_active:
+        frame = effects.apply_water_splash(frame, newly_active, keyboard.keys, layout.keyboard_top, color_scheme)
 
     # 6. Ascending bubbles
     frame = effects.apply_ascending_bubbles(frame, visible, active, keyboard.keys, layout.keyboard_top, color_scheme, current_time)

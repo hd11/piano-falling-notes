@@ -1,4 +1,4 @@
-"""Impact/burst effects — neon burst water droplet splash."""
+"""Impact/burst effects — water splash droplet effect."""
 
 import numpy as np
 from PIL import Image
@@ -7,7 +7,7 @@ from PIL import Image
 class BurstEffectsMixin:
     """Requires VisualEffects.__init__ for state initialization."""
 
-    def apply_neon_burst(
+    def apply_water_splash(
         self,
         img: Image.Image,
         newly_active: dict,
@@ -72,43 +72,6 @@ class BurstEffectsMixin:
             if fade < 0.01:
                 expired.append(midi)
                 continue
-
-            # === Layer 1: Central splash ring (expanding water ring) ===
-            ring_r = key_w * (0.8 + frame * 1.0)
-            if ring_r < key_w * 8:
-                ring_thick = 0.2 - frame * 0.03
-                ring_thick = max(ring_thick, 0.05)
-                rx0 = max(0, int(cx - ring_r * 1.5))
-                rx1 = min(w, int(cx + ring_r * 1.5))
-                if rx0 < rx1:
-                    cols = np.arange(rx0, rx1, dtype=np.float32)
-                    rows = np.arange(h, dtype=np.float32)
-                    dx = (cols - cx) / max(ring_r, 1)
-                    dy = (rows - float(h)) / max(ring_r * 0.5, 1)
-                    dist = np.sqrt(dy[:, np.newaxis] ** 2 + dx[np.newaxis, :] ** 2)
-                    ring = np.exp(-((dist - 1.0) ** 2) / (2 * ring_thick ** 2))
-                    ring_light = ring[:, :, np.newaxis] * c[np.newaxis, np.newaxis, :] * fade * 0.5
-                    region = strip[:, rx0:rx1, :]
-                    strip[:, rx0:rx1, :] = np.minimum(region + ring_light, 255.0)
-
-            # === Layer 2: Small central glow (impact point) ===
-            if frame <= 3:
-                glow_r = key_w * (1.2 - frame * 0.3)
-                gx0 = max(0, int(cx - glow_r * 2))
-                gx1 = min(w, int(cx + glow_r * 2))
-                if gx0 < gx1:
-                    cols = np.arange(gx0, gx1, dtype=np.float32)
-                    rows = np.arange(h, dtype=np.float32)
-                    dx = (cols - cx) / max(glow_r, 1)
-                    dy = (rows - float(h)) / max(glow_r * 0.6, 1)
-                    dist2 = dy[:, np.newaxis] ** 2 + dx[np.newaxis, :] ** 2
-                    glow = np.exp(-dist2 / (2 * 0.3 ** 2)) * fade * 0.8
-                    white = np.array([255, 255, 255], dtype=np.float32)
-                    wmix = np.exp(-dist2 / (2 * 0.15 ** 2))
-                    glow_color = wmix[:, :, np.newaxis] * white + (1 - wmix[:, :, np.newaxis]) * c
-                    glow_light = glow[:, :, np.newaxis] * glow_color
-                    region = strip[:, gx0:gx1, :]
-                    strip[:, gx0:gx1, :] = np.minimum(region + glow_light, 255.0)
 
             # === Layer 3: Flying droplets ===
             if frame <= 10:

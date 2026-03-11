@@ -595,6 +595,18 @@
           <div class="toggle-track"></div>
         </label>
       </div>
+          <div class="sub-controls" id="energy_threshold_controls">
+            <div class="slider-row">
+              <label for="energy_mid_threshold">저→중 전환점 <span id="energy_mid_val">0.60</span></label>
+              <input type="range" id="energy_mid_threshold" name="energy_mid_threshold" min="0.10" max="0.80" step="0.05" value="0.60"
+                     oninput="document.getElementById('energy_mid_val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+            <div class="slider-row">
+              <label for="energy_high_threshold">중→고 전환점 <span id="energy_high_val">0.90</span></label>
+              <input type="range" id="energy_high_threshold" name="energy_high_threshold" min="0.50" max="0.99" step="0.05" value="0.90"
+                     oninput="document.getElementById('energy_high_val').textContent=parseFloat(this.value).toFixed(2)">
+            </div>
+          </div>
 
       <div class="toggle-row">
         <div class="toggle-label-group">
@@ -631,11 +643,11 @@
 
       <div class="toggle-row">
         <div class="toggle-label-group">
-          <span class="label-main">네온 버스트</span>
-          <span class="label-sub">--no-neon-burst · 건반 타격 시 네온 폭발</span>
+          <span class="label-main">물방울 스플래시</span>
+          <span class="label-sub">--no-water-splash · 건반 타격 시 물방울</span>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="neon_burst" checked />
+          <input type="checkbox" id="water_splash" checked />
           <div class="toggle-track"></div>
         </label>
       </div>
@@ -650,6 +662,13 @@
           <div class="toggle-track"></div>
         </label>
       </div>
+          <div class="sub-controls">
+            <div class="slider-row">
+              <label for="glow_intensity">글로우 강도 <span id="glow_int_val">0.7</span></label>
+              <input type="range" id="glow_intensity" name="glow_intensity" min="0.1" max="1.5" step="0.1" value="0.7"
+                     oninput="document.getElementById('glow_int_val').textContent=parseFloat(this.value).toFixed(1)">
+            </div>
+          </div>
 
       <div class="toggle-row">
         <div class="toggle-label-group">
@@ -955,11 +974,14 @@
 
     // Effects
     fd.append('energy_color',  document.getElementById('energy_color').checked  ? 'on' : 'off');
+    fd.append('energy_mid_threshold', document.getElementById('energy_mid_threshold').value);
+    fd.append('energy_high_threshold', document.getElementById('energy_high_threshold').value);
     fd.append('comet_effect',  document.getElementById('comet_effect').checked  ? 'on' : 'off');
     fd.append('comet_trail_glow', document.getElementById('comet_trail_glow').checked ? 'on' : 'off');
     fd.append('starflow',      document.getElementById('starflow').checked      ? 'on' : 'off');
-    fd.append('neon_burst',    document.getElementById('neon_burst').checked    ? 'on' : 'off');
+    fd.append('water_splash',  document.getElementById('water_splash').checked  ? 'on' : 'off');
     fd.append('glow',          document.getElementById('glow').checked          ? 'on' : 'off');
+    fd.append('glow_intensity', document.getElementById('glow_intensity').value);
     fd.append('guide_lines',   document.getElementById('guide_lines').checked   ? 'on' : 'off');
     fd.append('glitter',       document.getElementById('glitter').checked       ? 'on' : 'off');
 
