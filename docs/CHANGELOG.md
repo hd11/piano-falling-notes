@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.0 — 이펙트 개선 + 에너지 색상 범위 조절 (2026-03-11)
+
+### 이펙트 변경
+- **neon_burst → water_splash**: 링(확장 원형)·글로우(번쩍임) 레이어 제거, 물방울 파티클만 유지
+  - CLI: `--no-water-splash` (기존 `--no-neon-burst` 대체)
+  - 웹 UI 레이블도 동기화
+- **혜성(comet) 기본값**: 기본 ON (`--no-comet`으로 비활성화)
+
+### 새 기능: 에너지 색변환 범위 조절
+- **에너지 전환점 설정**: 저→중 / 중→고 색상 전환 임계값을 조절 가능
+  - Config: `energy_mid_threshold` (기본 0.60), `energy_high_threshold` (기본 0.90)
+  - CLI: `--energy-mid`, `--energy-high`
+  - 웹 UI: 슬라이더로 실시간 조절
+
+### 웹 UI 동기화
+- **글로우 강도 슬라이더**: `--glow-intensity` CLI 옵션이 웹에 없던 문제 수정, 슬라이더 추가
+- CLI↔웹 옵션 전체 정합성 검토 완료
+
+---
+
 ## v1.1.1 — 코드 리뷰 수정 + 문서화 (2026-03-10)
 
 ### 버그 수정
